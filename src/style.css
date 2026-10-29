@@ -88,3 +88,6 @@ main { flex: 1; position: relative; min-width: 0; }
 }
 .fallback-note { position: absolute; top: 10px; right: 12px; font-size: 0.75rem; color: var(--muted); background: rgb(255 255 255 / 0.85); padding: 4px 8px; border-radius: 6px; }
 #viewport canvas { display: block; touch-action: none; }
+.filament { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--muted); font-size: 0.8rem; }
+.filament select, .download-bar select { font-size: 0.8rem; padding: 3px 5px; }
+.download-bar { display: flex; align-items: center; gap: 8px; }

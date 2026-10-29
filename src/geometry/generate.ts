@@ -31,6 +31,8 @@ export interface MeshOut {
   min: Vec3;
   max: Vec3;
   fitsBed: boolean;
+  /** Solid volume in mm³. */
+  volume: number;
 }
 
 export interface GenerateResult {
@@ -55,7 +57,7 @@ function toMesh(name: string, m: Manifold, bed: PrintSettings): MeshOut {
   const sx = bb.max[0] - bb.min[0];
   const sy = bb.max[1] - bb.min[1];
   const fitsBed = (sx <= bed.bedX + 1e-6 && sy <= bed.bedY + 1e-6) || (sx <= bed.bedY + 1e-6 && sy <= bed.bedX + 1e-6);
-  return { name, positions, indices: new Uint32Array(mesh.triVerts), min: bb.min, max: bb.max, fitsBed };
+  return { name, positions, indices: new Uint32Array(mesh.triVerts), min: bb.min, max: bb.max, fitsBed, volume: m.volume() };
 }
 
 function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec; connector?: Connector; base: string; warnings: string[] } {

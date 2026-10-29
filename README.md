@@ -20,7 +20,10 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 - Cuts only along grid lines, into the fewest and most even pieces (a 7-unit plate on a 5-unit bed becomes 4 + 3, not 5 + 2)
 - Baseplates join with dovetails in the bottom layer, with an adjustable fit gap (default 0.2 mm per side)
 - Bins split with flat faces for gluing
-- Each piece downloads as its own STL, or all together as a .zip
+- Each piece downloads as its own STL or 3MF, or all together (.zip of STLs, or one 3MF with every piece)
+
+**Filament estimate**
+- Upper-bound grams and metres for PLA, PETG or ABS, based on the solid volume
 
 **MultiBoard-compatible tiles (experimental)**
 - 25 mm grid tiles with large and peg holes. See the note below.

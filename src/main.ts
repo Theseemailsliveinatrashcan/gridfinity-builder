@@ -1,5 +1,7 @@
 import './style.css';
+import { estimateFilament, MATERIALS, type Material } from './export/filament';
 import { toBinaryStl } from './export/stl';
+import { to3mf } from './export/threemf';
 import { zip } from './export/zip';
 import { BED_PRESETS, SECTIONS, type Field } from './fields';
 import { defaultPlate } from './geometry/baseplate';
@@ -56,7 +58,6 @@ const viewer: { show(pieces: MeshOut[], explode: boolean, frameKey: string): voi
 
 const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
 let requestId = 0;
-let latest: GenerateResult | undefined;
 let busy = false;
 let pending = false;
 
@@ -65,10 +66,8 @@ worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
   const msg = e.data;
   if (msg.id === requestId) {
     if (msg.ok) {
-      latest = msg.result;
       showResult(msg.result, msg.ms);
     } else {
-      latest = undefined;
       statusEl.textContent = '';
       warningsEl.innerHTML = '';
       const li = document.createElement('li');
@@ -239,10 +238,57 @@ $<HTMLButtonElement>('#reset').onclick = () => {
 
 const mm = (v: number) => (Math.round(v * 10) / 10).toString();
 
+/** Centre each piece on the bed origin, resting on z = 0. */
+const bedOffset = (p: MeshOut): [number, number, number] => [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2, p.min[2]];
+
 function stlFor(p: MeshOut): Uint8Array {
-  // Centre each piece on the bed origin, resting on z = 0.
-  const offset: [number, number, number] = [(p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2, p.min[2]];
-  return toBinaryStl(p.positions, p.indices, offset);
+  return toBinaryStl(p.positions, p.indices, bedOffset(p));
+}
+
+type Format = 'stl' | '3mf';
+const prefs = {
+  format: (localStorage.getItem('format') === '3mf' ? '3mf' : 'stl') as Format,
+  material: (localStorage.getItem('material') ?? 'PLA') as Material,
+};
+if (!(prefs.material in MATERIALS)) prefs.material = 'PLA';
+
+function savePrefs(): void {
+  localStorage.setItem('format', prefs.format);
+  localStorage.setItem('material', prefs.material);
+  if (lastResult) showResult(lastResult.r, lastResult.ms);
+}
+
+let lastResult: { r: GenerateResult; ms: number } | undefined;
+
+function select<T extends string>(options: [T, string][], value: T, onChange: (v: T) => void, label: string): HTMLSelectElement {
+  const el = document.createElement('select');
+  el.setAttribute('aria-label', label);
+  for (const [v, text] of options) el.add(new Option(text, v, false, v === value));
+  el.onchange = () => onChange(el.value as T);
+  return el;
+}
+
+function filamentLine(r: GenerateResult): HTMLElement {
+  const total = r.pieces.reduce((s, p) => s + p.volume, 0);
+  const est = estimateFilament(total, prefs.material);
+  const row = document.createElement('div');
+  row.className = 'filament';
+  const text = document.createElement('span');
+  text.textContent = `≤ ${Math.round(est.grams)} g · ${est.metres.toFixed(1)} m of 1.75 mm`;
+  text.title = 'Upper bound: the part printed fully solid. Normal infill uses less.';
+  row.append(
+    text,
+    select(
+      Object.keys(MATERIALS).map((m) => [m as Material, m]),
+      prefs.material,
+      (v) => {
+        prefs.material = v;
+        savePrefs();
+      },
+      'Material',
+    ),
+  );
+  return row;
 }
 
 function download(name: string, data: Uint8Array, type: string): void {
@@ -255,10 +301,13 @@ function download(name: string, data: Uint8Array, type: string): void {
 }
 
 function showResult(r: GenerateResult, ms: number): void {
-  viewer.show(r.pieces, true, `${state.kind}`);
+  const fresh = lastResult?.r !== r;
+  lastResult = { r, ms };
+  if (fresh) viewer.show(r.pieces, true, `${state.kind}`);
   const [x, y, z] = r.size;
   const n = r.pieces.length;
   statusEl.textContent = `${mm(x)} × ${mm(y)} × ${mm(z)} mm · ${n} piece${n === 1 ? '' : 's'} · ${Math.round(ms)} ms`;
+  statusEl.append(filamentLine(r));
 
   warningsEl.innerHTML = '';
   for (const w of r.warnings) {
@@ -268,21 +317,41 @@ function showResult(r: GenerateResult, ms: number): void {
   }
 
   downloadsEl.innerHTML = '';
+  const base = r.pieces[0].name.replace(/-piece-.*$/, '');
+  const threeMf = (pieces: MeshOut[]) =>
+    to3mf(pieces.map((p) => ({ name: p.name, positions: p.positions, indices: p.indices, offset: bedOffset(p) })));
+  const single = (p: MeshOut) =>
+    prefs.format === '3mf'
+      ? download(`${p.name}.3mf`, threeMf([p]), 'model/3mf')
+      : download(`${p.name}.stl`, stlFor(p), 'model/stl');
+
+  const bar = document.createElement('div');
+  bar.className = 'download-bar';
+  const main = document.createElement('button');
+  main.className = 'primary';
+  const fmt = prefs.format.toUpperCase();
   if (n === 1) {
-    const b = document.createElement('button');
-    b.className = 'primary';
-    b.textContent = 'Download STL';
-    b.onclick = () => download(`${r.pieces[0].name}.stl`, stlFor(r.pieces[0]), 'model/stl');
-    downloadsEl.append(b);
+    main.textContent = `Download ${fmt}`;
+    main.onclick = () => single(r.pieces[0]);
+  } else if (prefs.format === '3mf') {
+    main.textContent = `Download all ${n} pieces (.3mf)`;
+    main.onclick = () => download(`${base}.3mf`, threeMf(r.pieces), 'model/3mf');
   } else {
-    const all = document.createElement('button');
-    all.className = 'primary';
-    all.textContent = `Download all ${n} pieces (.zip)`;
-    all.onclick = () => {
+    main.textContent = `Download all ${n} pieces (.zip)`;
+    main.onclick = () => {
       const files = r.pieces.map((p) => ({ name: `${p.name}.stl`, data: stlFor(p) }));
-      download(`${r.pieces[0].name.replace(/-piece-.*$/, '')}.zip`, zip(files), 'application/zip');
+      download(`${base}.zip`, zip(files), 'application/zip');
     };
-    downloadsEl.append(all);
+  }
+  bar.append(
+    main,
+    select<Format>([['stl', 'STL'], ['3mf', '3MF']], prefs.format, (v) => {
+      prefs.format = v;
+      savePrefs();
+    }, 'File format'),
+  );
+  downloadsEl.append(bar);
+  if (n > 1) {
     const list = document.createElement('ul');
     list.className = 'pieces';
     r.pieces.forEach((p) => {
@@ -290,7 +359,7 @@ function showResult(r: GenerateResult, ms: number): void {
       const a = document.createElement('button');
       a.className = 'link';
       a.textContent = `${p.name.replace(/^.*-(piece-)/, '$1')} · ${mm(p.max[0] - p.min[0])} × ${mm(p.max[1] - p.min[1])} mm${p.fitsBed ? '' : ' (too big)'}`;
-      a.onclick = () => download(`${p.name}.stl`, stlFor(p), 'model/stl');
+      a.onclick = () => single(p);
       li.append(a);
       list.append(li);
     });
@@ -300,4 +369,3 @@ function showResult(r: GenerateResult, ms: number): void {
 
 renderForm();
 run();
-void latest;
