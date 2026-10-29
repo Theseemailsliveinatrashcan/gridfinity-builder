@@ -151,3 +151,14 @@ describe('dovetail fit', () => {
     expect(lost).toBeLessThan(25);
   });
 });
+
+describe('asymmetric bed', () => {
+  it('uses the bed turned 90 degrees when that needs fewer pieces', async () => {
+    const { planSplit } = await import('../src/geometry/split');
+    // 2 x 6 units (84 x 252 mm) on a 260 x 100 bed: needs the long side along the bed's long side.
+    const axis = (n: number) => ({ cells: Array(n).fill(42), padStart: 0, padEnd: 0, origin: 0 });
+    const plan = planSplit(axis(2), axis(6), 260, 100);
+    expect(plan?.rotated).toBe(true);
+    expect((plan!.xCuts.length + 1) * (plan!.yCuts.length + 1)).toBe(1);
+  });
+});
