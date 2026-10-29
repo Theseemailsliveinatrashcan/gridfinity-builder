@@ -162,3 +162,20 @@ describe('asymmetric bed', () => {
     expect((plan!.xCuts.length + 1) * (plan!.yCuts.length + 1)).toBe(1);
   });
 });
+
+describe('internal depth', () => {
+  it('gives exactly the requested usable depth', async () => {
+    const { binLayout } = await import('../src/geometry/bin');
+    for (const lip of ['normal', 'none'] as const) {
+      const L = binLayout({ ...defaultBin, lip, heightMode: 'internal', internalDepth: 33 });
+      expect(L.interiorTop - L.floorZ).toBeCloseTo(33, 6);
+    }
+    const m = bin({ width: 1, depth: 1, lip: 'none', heightMode: 'internal', internalDepth: 30 });
+    expect(m.status()).toBe('NoError');
+    expect(size(m)[2]).toBeCloseTo(4.75 + 2.25 + 30, 3);
+  });
+
+  it('units mode is unchanged by the new option', () => {
+    expect(size(bin({ width: 1, depth: 1, height: 3, internalDepth: 99 }))).toEqual([41.5, 41.5, 24.8]);
+  });
+});

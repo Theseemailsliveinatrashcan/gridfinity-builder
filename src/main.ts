@@ -2,44 +2,15 @@ import './style.css';
 import { estimateFilament, MATERIALS, type Material } from './export/filament';
 import { toBinaryStl } from './export/stl';
 import { to3mf } from './export/threemf';
-import { zip } from './export/zip';
 import { BED_PRESETS, SECTIONS, type Field } from './fields';
-import { defaultPlate } from './geometry/baseplate';
-import { defaultBin } from './geometry/bin';
-import type { GenerateRequest, GenerateResult, MeshOut, PartKind } from './geometry/generate';
-import { defaultTile } from './geometry/multiboard';
+import type { GenerateResult, MeshOut, PartKind } from './geometry/generate';
+import { zipSync } from 'fflate';
+import { DEFAULTS, decodeState, encodeState } from './state';
 import { FallbackViewer } from './fallback-viewer';
 import { Viewer } from './viewer';
 import type { WorkerResponse } from './worker';
 
-const DEFAULTS: GenerateRequest = {
-  kind: 'bin',
-  bin: defaultBin,
-  plate: defaultPlate,
-  tile: defaultTile,
-  print: { split: false, bedX: 220, bedY: 220, connector: 'dovetail', clearance: 0.2 },
-};
-
-function loadState(): GenerateRequest {
-  try {
-    const hash = location.hash.slice(1);
-    if (hash) {
-      const s = JSON.parse(decodeURIComponent(atob(hash)));
-      return {
-        kind: s.kind ?? DEFAULTS.kind,
-        bin: { ...DEFAULTS.bin, ...s.bin },
-        plate: { ...DEFAULTS.plate, ...s.plate },
-        tile: { ...DEFAULTS.tile, ...s.tile },
-        print: { ...DEFAULTS.print, ...s.print },
-      };
-    }
-  } catch {
-    // ignore a malformed link
-  }
-  return structuredClone(DEFAULTS);
-}
-
-let state = loadState();
+let state = decodeState(location.hash.slice(1));
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector(sel) as T;
 const form = $<HTMLDivElement>('#form');
@@ -56,32 +27,60 @@ const viewer: { show(pieces: MeshOut[], explode: boolean, frameKey: string): voi
   }
 })();
 
-const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+let lastResult: { r: GenerateResult; ms: number } | undefined;
+
+const TIMEOUT_MS = 30_000;
+let worker = startWorker();
 let requestId = 0;
 let busy = false;
 let pending = false;
+let watchdog: number | undefined;
 
-worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
+function startWorker(): Worker {
+  const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+  w.onmessage = onWorkerMessage;
+  w.onerror = (e) => {
+    e.preventDefault();
+    restartWorker('The geometry engine crashed. Try a smaller part.');
+  };
+  w.onmessageerror = () => restartWorker('Could not read the result from the geometry engine.');
+  return w;
+}
+
+/** Kill a crashed or runaway worker and start a fresh one. */
+function restartWorker(message: string): void {
+  clearTimeout(watchdog);
+  worker.terminate();
+  worker = startWorker();
+  busy = false;
+  pending = false;
+  showError(message);
+}
+
+function showError(message: string): void {
+  lastResult = undefined;
+  statusEl.textContent = '';
+  warningsEl.innerHTML = '';
+  const li = document.createElement('li');
+  li.className = 'error';
+  li.textContent = message;
+  warningsEl.append(li);
+  downloadsEl.innerHTML = '';
+}
+
+function onWorkerMessage(e: MessageEvent<WorkerResponse>): void {
+  clearTimeout(watchdog);
   busy = false;
   const msg = e.data;
   if (msg.id === requestId) {
-    if (msg.ok) {
-      showResult(msg.result, msg.ms);
-    } else {
-      statusEl.textContent = '';
-      warningsEl.innerHTML = '';
-      const li = document.createElement('li');
-      li.className = 'error';
-      li.textContent = msg.error;
-      warningsEl.append(li);
-      downloadsEl.innerHTML = '';
-    }
+    if (msg.ok) showResult(msg.result, msg.ms);
+    else showError(msg.error);
   }
   if (pending) {
     pending = false;
     run();
   }
-};
+}
 
 function run(): void {
   if (busy) {
@@ -92,12 +91,23 @@ function run(): void {
   requestId++;
   statusEl.textContent = 'Generating…';
   worker.postMessage({ id: requestId, req: state });
+  watchdog = window.setTimeout(
+    () => restartWorker(`Generation took longer than ${TIMEOUT_MS / 1000} s and was stopped. Try a smaller part or fewer features.`),
+    TIMEOUT_MS,
+  );
 }
 
 let timer: number | undefined;
-function changed(): void {
-  history.replaceState(null, '', '#' + btoa(encodeURIComponent(JSON.stringify(state))));
-  renderForm();
+/** Which fields are visible; the form is rebuilt only when this changes. */
+function layoutKey(): string {
+  return state.kind + SECTIONS.flatMap((s) => s.fields.map((f) => (f.show && !f.show(state) ? '0' : '1'))).join('');
+}
+let renderedLayout = '';
+
+/** fromInput: the change came from a form control that already shows the new value. */
+function changed(fromInput = false): void {
+  history.replaceState(null, '', '#' + encodeState(state));
+  if (!fromInput || layoutKey() !== renderedLayout) renderForm();
   clearTimeout(timer);
   timer = window.setTimeout(run, 180);
 }
@@ -124,7 +134,7 @@ function input(f: Field): HTMLElement {
     el.checked = Boolean(value);
     el.onchange = () => {
       groupOf(f)[f.key] = el.checked;
-      changed();
+      changed(true);
     };
     wrap.append(el, title);
   } else if (f.kind === 'select') {
@@ -132,7 +142,7 @@ function input(f: Field): HTMLElement {
     for (const [v, text] of f.options ?? []) el.add(new Option(text, v, false, v === value));
     el.onchange = () => {
       groupOf(f)[f.key] = el.value;
-      changed();
+      changed(true);
     };
     wrap.append(title, el);
   } else {
@@ -142,17 +152,19 @@ function input(f: Field): HTMLElement {
     if (f.max !== undefined) el.max = String(f.max);
     if (f.step !== undefined) el.step = String(f.step);
     el.value = String(value);
+    const out = document.createElement('output');
+    out.textContent = Number(value).toFixed(2);
     const commit = () => {
       const n = Number(el.value);
       if (!Number.isFinite(n)) return;
       const clamped = Math.min(f.max ?? Infinity, Math.max(f.min ?? -Infinity, n));
       groupOf(f)[f.key] = clamped;
-      changed();
+      el.value = String(clamped);
+      out.textContent = clamped.toFixed(2);
+      changed(true);
     };
     if (f.kind === 'range') {
       el.oninput = commit;
-      const out = document.createElement('output');
-      out.textContent = Number(value).toFixed(2);
       wrap.append(title, el, out);
     } else {
       el.onchange = commit;
@@ -177,6 +189,7 @@ function input(f: Field): HTMLElement {
 }
 
 function renderForm(): void {
+  renderedLayout = layoutKey();
   const focused = document.activeElement as HTMLElement | null;
   const focusKey = focused?.dataset.key;
   form.innerHTML = '';
@@ -258,7 +271,6 @@ function savePrefs(): void {
   if (lastResult) showResult(lastResult.r, lastResult.ms);
 }
 
-let lastResult: { r: GenerateResult; ms: number } | undefined;
 
 function select<T extends string>(options: [T, string][], value: T, onChange: (v: T) => void, label: string): HTMLSelectElement {
   const el = document.createElement('select');
@@ -340,7 +352,7 @@ function showResult(r: GenerateResult, ms: number): void {
     main.textContent = `Download all ${n} pieces (.zip)`;
     main.onclick = () => {
       const files = r.pieces.map((p) => ({ name: `${p.name}.stl`, data: stlFor(p) }));
-      download(`${base}.zip`, zip(files), 'application/zip');
+      download(`${base}.zip`, zipSync(Object.fromEntries(files.map((f) => [f.name, f.data]))), 'application/zip');
     };
   }
   bar.append(

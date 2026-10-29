@@ -1,25 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { estimateFilament } from '../src/export/filament';
 import { to3mf } from '../src/export/threemf';
-import { crc32 } from '../src/export/zip';
-
-/** Read a stored (uncompressed) zip produced by src/export/zip.ts. */
-function unzip(data: Uint8Array): Map<string, Uint8Array> {
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const files = new Map<string, Uint8Array>();
-  let o = 0;
-  while (view.getUint32(o, true) === 0x04034b50) {
-    const crc = view.getUint32(o + 14, true);
-    const size = view.getUint32(o + 18, true);
-    const nameLen = view.getUint16(o + 26, true);
-    const name = new TextDecoder().decode(data.subarray(o + 30, o + 30 + nameLen));
-    const body = data.subarray(o + 30 + nameLen, o + 30 + nameLen + size);
-    expect(crc32(body)).toBe(crc);
-    files.set(name, body);
-    o += 30 + nameLen + size;
-  }
-  return files;
-}
+import { unzipSync } from 'fflate';
 
 // Unit cube, 8 vertices, 12 CCW triangles.
 const cube = {
@@ -33,7 +15,7 @@ describe('3MF export', () => {
       { name: 'a & <b>', ...cube, offset: [0, 0, 0] },
       { name: 'second', ...cube, offset: [0.5, 0.5, 0] },
     ]);
-    const files = unzip(data);
+    const files = new Map(Object.entries(unzipSync(data)));
     expect([...files.keys()].sort()).toEqual(['3D/3dmodel.model', '[Content_Types].xml', '_rels/.rels']);
     const model = new TextDecoder().decode(files.get('3D/3dmodel.model'));
     expect(model).toContain('unit="millimeter"');

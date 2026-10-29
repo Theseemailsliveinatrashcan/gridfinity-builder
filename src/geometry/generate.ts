@@ -74,7 +74,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       part: buildBin(p),
       x: { cells: xs, padStart: gap, padEnd: gap, origin: -(p.width * GRID) / 2 },
       y: { cells: ys, padStart: gap, padEnd: gap, origin: -(p.depth * GRID) / 2 },
-      base: `gridfinity-bin-${p.width}x${p.depth}x${p.height}`,
+      base: `gridfinity-bin-${p.width}x${p.depth}x${p.heightMode === 'internal' ? `${p.internalDepth}mm` : p.height}`,
       warnings,
     };
   }

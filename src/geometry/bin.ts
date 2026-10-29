@@ -33,6 +33,7 @@ import {
 } from './kernel';
 
 export type LipStyle = 'normal' | 'none';
+export type HeightMode = 'units' | 'internal';
 export type TabStyle = 'none' | 'full' | 'left' | 'center' | 'right';
 
 export interface BinParams {
@@ -41,6 +42,10 @@ export interface BinParams {
   depth: number;
   /** Height in 7 mm units, foot included, lip excluded. */
   height: number;
+  /** 'internal': size the bin by usable depth (floor to top of the walls) instead. */
+  heightMode: HeightMode;
+  /** Usable depth in mm, used when heightMode is 'internal'. */
+  internalDepth: number;
   wall: number;
   /** Floor thickness above the top of the foot profile (4.75 mm). */
   floor: number;
@@ -60,6 +65,8 @@ export const defaultBin: BinParams = {
   width: 2,
   depth: 1,
   height: 6,
+  heightMode: 'units',
+  internalDepth: 30,
   wall: 0.95,
   floor: 2.25,
   lip: 'normal',
@@ -107,10 +114,11 @@ export interface BinLayout {
 export function binLayout(p: BinParams): BinLayout {
   const outerW = p.width * GRID - BASE_TOP_SIZE_GAP;
   const outerD = p.depth * GRID - BASE_TOP_SIZE_GAP;
-  const top = p.height * HEIGHT_UNIT;
   const wall = p.lip === 'normal' ? Math.min(p.wall, LIP_DEPTH) : p.wall;
   const floorZ = BASE_PROFILE_HEIGHT + p.floor;
-  const interiorTop = p.lip === 'normal' ? top - LIP_SUPPORT_HEIGHT - (LIP_DEPTH - wall) : top;
+  const lipSupport = p.lip === 'normal' ? LIP_SUPPORT_HEIGHT + (LIP_DEPTH - wall) : 0;
+  const top = p.heightMode === 'internal' ? floorZ + p.internalDepth + lipSupport : p.height * HEIGHT_UNIT;
+  const interiorTop = top - lipSupport;
   return { outerW, outerD, top, floorZ, interiorTop, cavW: outerW - 2 * wall, cavD: outerD - 2 * wall, wall };
 }
 

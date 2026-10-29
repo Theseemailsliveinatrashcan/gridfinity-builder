@@ -1,4 +1,4 @@
-import { zip } from './zip';
+import { strToU8, zipSync } from 'fflate';
 
 export interface ThreeMfObject {
   name: string;
@@ -63,10 +63,9 @@ export function to3mf(objects: ThreeMfObject[], gap = 10): Uint8Array {
 <build>${items.join('')}</build>
 </model>
 `;
-  const enc = new TextEncoder();
-  return zip([
-    { name: '[Content_Types].xml', data: enc.encode(CONTENT_TYPES) },
-    { name: '_rels/.rels', data: enc.encode(RELS) },
-    { name: '3D/3dmodel.model', data: enc.encode(model) },
-  ]);
+  return zipSync({
+    '[Content_Types].xml': strToU8(CONTENT_TYPES),
+    '_rels/.rels': strToU8(RELS),
+    '3D/3dmodel.model': strToU8(model),
+  });
 }

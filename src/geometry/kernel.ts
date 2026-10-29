@@ -7,6 +7,10 @@ let wasm: ManifoldToplevel | undefined;
  * Every Manifold/CrossSection created by a library call is recorded here, so a
  * whole generation can be freed at once with freeAll(). WASM objects are not
  * garbage-collected, and geometry code is far clearer without manual delete().
+ *
+ * Rule: nothing may be cached across generate() calls unless it is passed to
+ * keep(), because freeAll() deletes everything else. Objects made with
+ * `new Manifold(mesh)` are not tracked; delete them yourself.
  */
 const arena: { delete(): void }[] = [];
 
@@ -48,6 +52,17 @@ export async function initKernel(locateFile?: () => string): Promise<ManifoldTop
 export function k(): ManifoldToplevel {
   if (!wasm) throw new Error('Geometry kernel not initialised');
   return wasm;
+}
+
+/** Exempt an object from freeAll(); the caller now owns it. */
+export function keep<T extends { delete(): void }>(obj: T): T {
+  const i = arena.indexOf(obj);
+  if (i >= 0) arena.splice(i, 1);
+  return obj;
+}
+
+export function trackedCount(): number {
+  return arena.length;
 }
 
 export function freeAll(): void {

@@ -34,7 +34,9 @@ export const SECTIONS: Section[] = [
     fields: [
       bin({ key: 'width', label: 'Width', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units', help: '1 unit = 42 mm. Half units allowed.' }),
       bin({ key: 'depth', label: 'Depth', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units' }),
-      bin({ key: 'height', label: 'Height', kind: 'number', min: 2, max: 24, step: 1, unit: '× 7 mm', help: 'Includes the foot; the stacking lip sits on top.' }),
+      bin({ key: 'heightMode', label: 'Set height by', kind: 'select', options: [['units', 'Gridfinity units'], ['internal', 'Inside depth (mm)']] }),
+      bin({ key: 'height', label: 'Height', kind: 'number', min: 2, max: 24, step: 1, unit: '× 7 mm', help: 'Includes the foot; the stacking lip sits on top.', show: (s) => s.bin.heightMode !== 'internal' }),
+      bin({ key: 'internalDepth', label: 'Inside depth', kind: 'number', min: 5, max: 160, step: 0.5, unit: 'mm', help: 'From the floor to the top of the walls.', show: (s) => s.bin.heightMode === 'internal' }),
     ],
   },
   {
