@@ -54,3 +54,11 @@ export const WEIGHTED_BOTTOM = 6.4;
 export const WEIGHT_POCKET_SIZE = 21.4;
 export const WEIGHT_POCKET_DEPTH = 4;
 export const SOLID_BOTTOM = 3.2; // room for 2.4 mm magnet pockets plus a floor
+
+// Baseplate screw-down hardware (gridfinity-rebuilt standard.scad).
+export const SCREW_HOLE_RADIUS = 1.5;
+export const BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS = 5 / 2;
+export const BASEPLATE_SCREW_COUNTERBORE_RADIUS = 5.5 / 2;
+export const BASEPLATE_SCREW_COUNTERBORE_HEIGHT = 3;
+// 3 mm head recess with 0.6 mm of material beneath its shoulder.
+export const MOUNT_BOTTOM = BASEPLATE_SCREW_COUNTERBORE_HEIGHT + 0.6;

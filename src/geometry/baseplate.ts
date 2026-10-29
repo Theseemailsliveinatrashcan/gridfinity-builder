@@ -1,6 +1,11 @@
 import type { Manifold } from 'manifold-3d';
 import {
   BASEPLATE_HEIGHT,
+  SCREW_HOLE_RADIUS,
+  BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS,
+  BASEPLATE_SCREW_COUNTERBORE_RADIUS,
+  BASEPLATE_SCREW_COUNTERBORE_HEIGHT,
+  MOUNT_BOTTOM,
   BASEPLATE_OUTER_RADIUS,
   BASEPLATE_PROFILE,
   GRID,
@@ -12,7 +17,7 @@ import {
   WEIGHT_POCKET_DEPTH,
   WEIGHT_POCKET_SIZE,
 } from './constants';
-import { box, cylinderAt, prism, roundedLoft, roundedRect, subtractAll } from './kernel';
+import { box, cylinderAt, k, prism, roundedLoft, roundedRect, subtractAll } from './kernel';
 
 export type PlateStyle = 'thin' | 'solid' | 'weighted';
 
@@ -21,6 +26,7 @@ export interface PlateParams {
   depth: number;
   style: PlateStyle;
   magnets: boolean;
+  mountHoles: 'none' | 'countersink' | 'counterbore';
   /** Drawer interior size in mm; 0 means "use width/depth in units". */
   drawerW: number;
   drawerD: number;
@@ -34,6 +40,7 @@ export const defaultPlate: PlateParams = {
   depth: 3,
   style: 'thin',
   magnets: false,
+  mountHoles: 'none',
   drawerW: 0,
   drawerD: 0,
   alignX: 0,
@@ -68,6 +75,7 @@ function axis(units: number, drawer: number, align: number): AxisLayout {
 
 export function plateBottom(p: PlateParams): number {
   if (p.style === 'weighted') return WEIGHTED_BOTTOM;
+  if (p.mountHoles !== 'none') return MOUNT_BOTTOM;
   if (p.style === 'solid' || p.magnets) return SOLID_BOTTOM;
   return 0;
 }
@@ -110,6 +118,16 @@ export function buildPlate(p: PlateParams): Manifold {
               cylinderAt(cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, L.bottom - MAGNET_DEPTH, L.bottom + 0.01, MAGNET_DIAMETER / 2),
             );
           }
+        }
+      }
+      // Weighted cells keep their underside weight pocket intact: skip mounting holes.
+      if (p.mountHoles !== 'none' && p.style !== 'weighted') {
+        cutters.push(cylinderAt(cx, cy, -1, L.bottom + 0.01, SCREW_HOLE_RADIUS));
+        if (p.mountHoles === 'counterbore') {
+          cutters.push(cylinderAt(cx, cy, L.bottom - BASEPLATE_SCREW_COUNTERBORE_HEIGHT, L.bottom, BASEPLATE_SCREW_COUNTERBORE_RADIUS));
+        } else {
+          const depth = BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS;
+          cutters.push(k().Manifold.cylinder(depth, SCREW_HOLE_RADIUS, SCREW_HOLE_RADIUS + depth, 32).translate([cx, cy, L.bottom - depth]));
         }
       }
       if (p.style === 'weighted') {

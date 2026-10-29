@@ -94,6 +94,7 @@ export const SECTIONS: Section[] = [
       plate({ key: 'alignX', label: 'Padding left ↔ right', kind: 'range', min: -1, max: 1, step: 0.1, show: (s) => s.plate.drawerW > 0, help: 'Left end: all padding on the left. Middle: split evenly.' }),
       plate({ key: 'alignY', label: 'Padding front ↔ back', kind: 'range', min: -1, max: 1, step: 0.1, show: (s) => s.plate.drawerD > 0 }),
       plate({ key: 'style', label: 'Style', kind: 'select', options: [['thin', 'Thin (open frame)'], ['solid', 'Solid bottom'], ['weighted', 'Weighted']] }),
+      plate({ key: 'mountHoles', label: 'Screw-down holes', kind: 'select', options: [['none', 'None'], ['countersink', 'Countersunk (Ø3 bore, Ø8 head)'], ['counterbore', 'Counterbored (Ø3 bore, Ø5.5 head)']], help: 'Adds a 3.6 mm bottom to thin plates (0.6 mm beneath a 3 mm head recess). Weighted plates skip screw holes to preserve weight pockets.' }),
       plate({ key: 'magnets', label: 'Magnet holes (6 × 2 mm)', kind: 'toggle', help: 'Adds a bottom layer to thin plates.' }),
     ],
   },
