@@ -2,7 +2,7 @@
 
 Design Gridfinity bins and baseplates in the browser, split large parts to fit your print bed, and download STLs. Everything runs on your machine; there is no server.
 
-**Live app:** https://theseemailsliveinatrashcan.github.io/Gridfinity-builder/
+**Live app:** https://theseemailsliveinatrashcan.github.io/gridfinity-builder/
 
 ## Features
 
