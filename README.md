@@ -7,10 +7,15 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 ## Features
 
 **Bins**
-- Any size in 0.5-unit steps (1 unit = 42 mm), height in 7 mm units
+- Any size in 0.5-unit steps (1 unit = 42 mm); height in 7 mm units or by inside depth in mm
 - Standard stacking lip or flat top, wall and floor thickness
 - Compartments in both directions, label tabs (full, left, center, right), finger scoops
 - Solid bins, magnet holes (6 × 2 mm), M3 screw holes, holes at outer corners only
+
+**Lids**
+- Seat in a bin's stacking lip; flat, or stackable with baseplate sockets on top
+- Optional finger recess and underside magnet holes
+- Test-print the fit first
 
 **Baseplates**
 - Size in units, or fit a drawer in mm with adjustable padding position
