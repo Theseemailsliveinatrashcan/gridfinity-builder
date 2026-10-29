@@ -1,5 +1,13 @@
 import type { Manifold } from 'manifold-3d';
+import type { Vec2 } from 'manifold-3d';
 import { box, loft, octagonPoints, subtractAll } from './kernel';
+
+function circlePoints(diameter: number, cx: number, cy: number, n = 32): Vec2[] {
+  return Array.from({ length: n }, (_, i) => {
+    const a = (i / n) * 2 * Math.PI;
+    return [cx + (diameter / 2) * Math.cos(a), cy + (diameter / 2) * Math.sin(a)] as Vec2;
+  });
+}
 
 /**
  * EXPERIMENTAL tile compatible with the MultiBoard wall system
@@ -25,18 +33,18 @@ export interface TileParams {
 
 export const defaultTile: TileParams = { cols: 4, rows: 4, edgePegHoles: false };
 
-/** Octagonal hole: wide at both faces, narrow band in the middle. */
-function octagonHole(face: number, band: number, bandHeight: number, x: number, y: number): Manifold {
+/** Hole that is wide at both faces with a narrow band in the middle (octagonal or round). */
+function bandHole(face: number, band: number, bandHeight: number, x: number, y: number, shape: (d: number, x: number, y: number) => Vec2[]): Manifold {
   const t = MB_THICKNESS;
   const z1 = (t - bandHeight) / 2;
   const z2 = z1 + bandHeight;
   const ext = 0.5;
   const slope = (face - band) / 2 / z1; // inset per mm of height
   return loft([
-    { z: -ext, outline: octagonPoints(face + 2 * slope * ext, x, y) },
-    { z: z1, outline: octagonPoints(band, x, y) },
-    { z: z2, outline: octagonPoints(band, x, y) },
-    { z: t + ext, outline: octagonPoints(face + 2 * slope * ext, x, y) },
+    { z: -ext, outline: shape(face + 2 * slope * ext, x, y) },
+    { z: z1, outline: shape(band, x, y) },
+    { z: z2, outline: shape(band, x, y) },
+    { z: t + ext, outline: shape(face + 2 * slope * ext, x, y) },
   ]);
 }
 
@@ -48,14 +56,14 @@ export function buildTile(p: TileParams): Manifold {
   const holes: Manifold[] = [];
   for (let i = 0; i < cols; i++) {
     for (let j = 0; j < rows; j++) {
-      holes.push(octagonHole(MB_LARGE_FACE, MB_LARGE_BAND, MB_LARGE_BAND_HEIGHT, (i + 0.5) * MB_PITCH, (j + 0.5) * MB_PITCH));
+      holes.push(bandHole(MB_LARGE_FACE, MB_LARGE_BAND, MB_LARGE_BAND_HEIGHT, (i + 0.5) * MB_PITCH, (j + 0.5) * MB_PITCH, octagonPoints));
     }
   }
   for (let i = 0; i <= cols; i++) {
     for (let j = 0; j <= rows; j++) {
       const edge = i === 0 || j === 0 || i === cols || j === rows;
       if (edge && !p.edgePegHoles) continue;
-      holes.push(octagonHole(MB_SMALL_FACE, MB_SMALL_BAND, MB_SMALL_BAND_HEIGHT, i * MB_PITCH, j * MB_PITCH));
+      holes.push(bandHole(MB_SMALL_FACE, MB_SMALL_BAND, MB_SMALL_BAND_HEIGHT, i * MB_PITCH, j * MB_PITCH, circlePoints));
     }
   }
   return subtractAll(tile, holes);
