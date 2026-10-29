@@ -20,11 +20,12 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 **Baseplates**
 - Size in units, or fit a drawer in mm with adjustable padding position
 - Thin (open frame), solid bottom, or weighted styles; magnet holes
+- Screw-down holes (M3, countersunk or counterbored) to fix a plate into a drawer
 
 **Split to fit your print bed**
 - Cuts only along grid lines, into the fewest and most even pieces (a 7-unit plate on a 5-unit bed becomes 4 + 3, not 5 + 2)
 - Baseplates join with dovetails in the bottom layer, with an adjustable fit gap (default 0.2 mm per side)
-- Bins split with flat faces for gluing
+- Bins and flat lids get dovetails in the floor layer that drop in from above; they move or skip spots blocked by dividers, scoops or label tabs, and fall back to flat (glued) seams when there is no room
 - Each piece downloads as its own STL or 3MF, or all together (.zip of STLs, or one 3MF with every piece)
 
 **Filament estimate**
