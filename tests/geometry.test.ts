@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { buildLid, defaultLid } from '../src/geometry/lid';
 import { buildBin, defaultBin, type BinParams } from '../src/geometry/bin';
 import { buildPlate, defaultPlate, type PlateParams } from '../src/geometry/baseplate';
 import { generate, type GenerateRequest } from '../src/geometry/generate';
@@ -98,6 +99,7 @@ describe('splitting', () => {
   const req = (over: Partial<GenerateRequest>): GenerateRequest => ({
     kind: 'plate',
     bin: defaultBin,
+    lid: defaultLid,
     plate: defaultPlate,
     tile: defaultTile,
     print: { split: true, bedX: 180, bedY: 180, connector: 'dovetail', clearance: 0.2 },
@@ -117,6 +119,12 @@ describe('splitting', () => {
     expect(r.warnings).toEqual([]);
     expect(r.pieces[0].max[0]).toBeCloseTo(84 + 5, 3);
     expect(r.pieces[1].min[0]).toBeCloseTo(84, 3);
+  });
+
+  it('splits a large lid into named pieces fitting the bed', () => {
+    const r = generate(req({ kind: 'lid', lid: { ...defaultLid, width: 6, depth: 2 } }));
+    expect(r.pieces.length).toBe(2);
+    expect(r.pieces.every(p => p.fitsBed && p.name.startsWith('gridfinity-lid-6x2-'))).toBe(true);
   });
 
   it('splits a large bin', () => {
@@ -177,5 +185,46 @@ describe('internal depth', () => {
 
   it('units mode is unchanged by the new option', () => {
     expect(size(bin({ width: 1, depth: 1, height: 3, internalDepth: 99 }))).toEqual([41.5, 41.5, 24.8]);
+  });
+});
+
+describe('lids', () => {
+  it('flat lid matches the footprint and 7 mm height', () => {
+    const m = buildLid(defaultLid);
+    expect(m.status()).toBe('NoError');
+    expect(m.genus()).toBe(0);
+    expect(size(m)).toEqual([83.5, 41.5, 7]);
+  });
+  it('stackable lid adds sockets and accepts a bin foot', () => {
+    const m = buildLid({ ...defaultLid, style: 'stackable' });
+    expect(m.status()).toBe('NoError');
+    expect(size(m)).toEqual([83.5, 41.5, 12]);
+    expect(m.intersect(bin().translate([0, 0, 7.25])).volume()).toBeLessThan(1e-6);
+  });
+  it('seats in a matching bin lip without overlap', () => {
+    for (const width of [1, 1.5, 2]) {
+      const m = buildLid({ ...defaultLid, width });
+      expect(m.translate([0, 0, defaultBin.height * 7]).intersect(bin({ width })).volume()).toBeLessThan(1e-6);
+    }
+  });
+  it('half cells, magnets and finger recess stay manifold', () => {
+    for (const style of ['flat', 'stackable'] as const) {
+      const p = { ...defaultLid, width: 1.5, depth: 0.5, style };
+      const plain = buildLid(p), grip = buildLid({ ...p, handle: true, magnets: true });
+      expect(grip.status()).toBe('NoError');
+      expect(size(grip).slice(0, 2)).toEqual([62.5, 20.5]);
+      expect(grip.volume()).toBeGreaterThan(0);
+      expect(grip.volume()).toBeLessThan(plain.volume());
+    }
+    for (const style of ['flat', 'stackable'] as const) {
+      const plain = buildLid({ ...defaultLid, style });
+      const featured = buildLid({ ...defaultLid, style, magnets: true, handle: true });
+      expect(featured.status()).toBe('NoError');
+      expect(featured.genus()).toBe(0);
+      expect(featured.volume()).toBeLessThan(plain.volume());
+    }
+  });
+  it('rejects dimensions outside half-unit steps', () => {
+    expect(() => buildLid({ ...defaultLid, width: 1.2 })).toThrow('half-unit');
   });
 });

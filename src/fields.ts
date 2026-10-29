@@ -1,6 +1,6 @@
 import type { GenerateRequest, PartKind } from './geometry/generate';
 
-export type Group = 'bin' | 'plate' | 'tile' | 'print';
+export type Group = 'bin' | 'plate' | 'tile' | 'lid' | 'print';
 
 export interface Field {
   group: Group;
@@ -23,6 +23,7 @@ export interface Section {
 }
 
 const bin = (f: Omit<Field, 'group'>): Field => ({ group: 'bin', ...f });
+const lid = (f: Omit<Field, 'group'>): Field => ({ group: 'lid', ...f });
 const plate = (f: Omit<Field, 'group'>): Field => ({ group: 'plate', ...f });
 const tile = (f: Omit<Field, 'group'>): Field => ({ group: 'tile', ...f });
 const print = (f: Omit<Field, 'group'>): Field => ({ group: 'print', ...f });
@@ -72,6 +73,17 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Lid — test-print the fit first',
+    kinds: ['lid'],
+    fields: [
+      lid({ key: 'width', label: 'Width', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units' }),
+      lid({ key: 'depth', label: 'Depth', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units' }),
+      lid({ key: 'style', label: 'Top style', kind: 'select', options: [['flat', 'Flat'], ['stackable', 'Stackable (baseplate sockets)']] }),
+      lid({ key: 'handle', label: 'Finger recess', kind: 'toggle', help: 'Shallow recess in the first cell.' }),
+      lid({ key: 'magnets', label: 'Underside magnet holes (6 × 2 mm)', kind: 'toggle', help: 'Whole cells only, matching bin magnet locations.' }),
+    ],
+  },
+  {
     title: 'Baseplate',
     kinds: ['plate'],
     fields: [
@@ -96,7 +108,7 @@ export const SECTIONS: Section[] = [
   },
   {
     title: 'Print bed',
-    kinds: ['bin', 'plate', 'tile'],
+    kinds: ['bin', 'plate', 'tile', 'lid'],
     fields: [
       print({ key: 'bedX', label: 'Bed width', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
       print({ key: 'bedY', label: 'Bed depth', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),

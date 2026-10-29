@@ -1,11 +1,12 @@
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from './bin';
 import { buildPlate, plateLayout, type PlateParams } from './baseplate';
-import { GRID } from './constants';
+import { buildLid, type LidParams } from './lid';
+import { BASE_TOP_SIZE_GAP, GRID } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
 import { DOVETAIL_DEPTH, planSplit, splitPart, type AxisSpec, type Connector, type Piece } from './split';
 
-export type PartKind = 'bin' | 'plate' | 'tile';
+export type PartKind = 'bin' | 'plate' | 'tile' | 'lid';
 export type ConnectorKind = 'dovetail' | 'none';
 
 export interface PrintSettings {
@@ -19,6 +20,7 @@ export interface PrintSettings {
 export interface GenerateRequest {
   kind: PartKind;
   bin: BinParams;
+  lid: LidParams;
   plate: PlateParams;
   tile: TileParams;
   print: PrintSettings;
@@ -78,6 +80,17 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       warnings,
     };
   }
+  if (req.kind === 'lid') {
+    const p = req.lid;
+    const gap = -BASE_TOP_SIZE_GAP / 2;
+    return {
+      part: buildLid(p),
+      x: { cells: cellPitches(p.width), padStart: gap, padEnd: gap, origin: -p.width * GRID / 2 },
+      y: { cells: cellPitches(p.depth), padStart: gap, padEnd: gap, origin: -p.depth * GRID / 2 },
+      base: `gridfinity-lid-${p.width}x${p.depth}`,
+      warnings,
+    };
+  }
   if (req.kind === 'plate') {
     const p = req.plate;
     const L = plateLayout(p);
@@ -127,7 +140,7 @@ export function generate(req: GenerateRequest): GenerateResult {
       warnings.push('A single grid cell is larger than the print bed, so the part cannot be split to fit.');
     } else if (plan.xCuts.length || plan.yCuts.length) {
       pieces = splitPart(part, plan, connector).map((pc) => ({ ...pc, name: `${base}-${pc.name}` }));
-      if (req.kind === 'bin') warnings.push('Split bins join with flat faces: glue the pieces together.');
+      if (req.kind === 'bin' || req.kind === 'lid') warnings.push('Split bins and lids join with flat faces: glue the pieces together.');
     }
   }
 

@@ -82,6 +82,13 @@ export function plateLayout(p: PlateParams): PlateLayout {
   };
 }
 
+export function socketCutter(w: number, d: number, cx: number, cy: number, bottom: number): Manifold {
+  const levels = BASEPLATE_PROFILE.map(([inset, z]) => ({ z: bottom + z, inset }));
+  if (bottom === 0) levels[0] = { z: -1, inset: levels[0].inset };
+  levels.push({ z: bottom + BASEPLATE_HEIGHT + 1, inset: -1 });
+  return roundedLoft(w, d, BASEPLATE_OUTER_RADIUS, levels, cx, cy);
+}
+
 /** Plate spans x in [0, length.x], y in [0, length.y], z in [0, height]. */
 export function buildPlate(p: PlateParams): Manifold {
   const L = plateLayout(p);
@@ -94,11 +101,7 @@ export function buildPlate(p: PlateParams): Manifold {
     for (let j = 0; j < L.y.units; j++) {
       const cx = L.x.padStart + (i + 0.5) * GRID;
       const cy = L.y.padStart + (j + 0.5) * GRID;
-      const levels = BASEPLATE_PROFILE.map(([inset, z]) => ({ z: L.bottom + z, inset }));
-      // Thin plates are open frames: start the cutter below the plate.
-      if (L.bottom === 0) levels[0] = { z: -1, inset: levels[0].inset };
-      levels.push({ z: L.height + 1, inset: -1 });
-      cutters.push(roundedLoft(GRID, GRID, BASEPLATE_OUTER_RADIUS, levels, cx, cy));
+      cutters.push(socketCutter(GRID, GRID, cx, cy, L.bottom));
 
       if (p.magnets && L.bottom > 0) {
         for (const sx of [-1, 1]) {
