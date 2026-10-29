@@ -148,7 +148,7 @@ describe('dovetail fit', () => {
     const { splitPart } = await import('../src/geometry/split');
     const part = buildPlate({ ...defaultPlate, width: 2, depth: 1, style: 'solid' });
     const pieces = splitPart(part, { xCuts: [42], yCuts: [], rotated: false }, {
-      height: 3.2, clearance: 0.2, xTabAt: [21], yTabAt: [],
+      zMin: -1, height: 3.2, slotTop: 3.4, clearance: 0.2, tabsAt: (axis) => axis === 'x' ? [21] : [],
     });
     expect(pieces.length).toBe(2);
     const [a, b] = pieces.map((p) => p.part);

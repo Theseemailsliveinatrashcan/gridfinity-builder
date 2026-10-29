@@ -108,13 +108,13 @@ export function planSplit(x: AxisSpec, y: AxisSpec, bedX: number, bedY: number, 
 // ---------------------------------------------------------------------------
 
 export interface Connector {
-  /** Dovetail tabs live in z from 0 to height. 0 disables connectors. */
+  /** Absolute Z limits of the tab layer. Plates start at -1. */
+  zMin: number;
   height: number;
+  slotTop: number;
   /** Gap per side between tab and slot. */
   clearance: number;
-  /** Positions along each cut line where a tab goes, per axis. */
-  xTabAt: number[]; // y-positions of tabs on cuts perpendicular to X
-  yTabAt: number[]; // x-positions of tabs on cuts perpendicular to Y
+  tabsAt(axis: 'x' | 'y', cut: number, lo: number, hi: number): number[];
 }
 
 export const DOVETAIL_DEPTH = 5;
@@ -132,10 +132,10 @@ function dovetail(clearance: number): Vec2[] {
   ];
 }
 
-function tabSolid(axisIsX: boolean, cut: number, at: number, z1: number, clearance: number): Manifold {
+export function tabSolid(axisIsX: boolean, cut: number, at: number, z0: number, z1: number, clearance: number): Manifold {
   const pts = dovetail(clearance).map(([u, v]) => (axisIsX ? [cut + u, at + v] : [at - v, cut + u]) as Vec2);
   // keep CCW: the Y mapping is a rotation, the X mapping is identity.
-  return k().CrossSection.ofPolygons([pts]).extrude(z1 + 1).translate([0, 0, -1]);
+  return k().CrossSection.ofPolygons([pts]).extrude(z1 - z0).translate([0, 0, z0]);
 }
 
 export interface Piece {
@@ -157,7 +157,7 @@ export function splitPart(part: Manifold, plan: SplitPlan, connector?: Connector
   const z0 = bb.min[2] - big;
   const z1 = bb.max[2] + big;
   const pieces: Piece[] = [];
-  const useTabs = !!connector && connector.height > 0;
+  const useTabs = !!connector && connector.height > connector.zMin;
 
   for (let i = 0; i + 1 < xs.length; i++) {
     for (let j = 0; j + 1 < ys.length; j++) {
@@ -167,21 +167,19 @@ export function splitPart(part: Manifold, plan: SplitPlan, connector?: Connector
         const adds: Manifold[] = [];
         const subs: Manifold[] = [];
         // Cut at the end of this piece in X: add tabs (within this piece's Y range).
-        const inY = (v: number) => v > ys[j] && v < ys[j + 1];
-        const inX = (v: number) => v > xs[i] && v < xs[i + 1];
         if (i + 1 < xs.length - 1) {
-          for (const at of connector.xTabAt.filter(inY)) adds.push(tabSolid(true, xs[i + 1], at, h, 0));
+          for (const at of connector.tabsAt('x', xs[i + 1], ys[j], ys[j + 1])) adds.push(tabSolid(true, xs[i + 1], at, connector.zMin, h, 0));
         }
         if (i > 0) {
-          for (const at of connector.xTabAt.filter(inY)) subs.push(tabSolid(true, xs[i], at, h + 0.2, connector.clearance));
+          for (const at of connector.tabsAt('x', xs[i], ys[j], ys[j + 1])) subs.push(tabSolid(true, xs[i], at, connector.zMin - 0.2, connector.slotTop, connector.clearance));
         }
         if (j + 1 < ys.length - 1) {
-          for (const at of connector.yTabAt.filter(inX)) adds.push(tabSolid(false, ys[j + 1], at, h, 0));
+          for (const at of connector.tabsAt('y', ys[j + 1], xs[i], xs[i + 1])) adds.push(tabSolid(false, ys[j + 1], at, connector.zMin, h, 0));
         }
         if (j > 0) {
-          for (const at of connector.yTabAt.filter(inX)) subs.push(tabSolid(false, ys[j], at, h + 0.2, connector.clearance));
+          for (const at of connector.tabsAt('y', ys[j], xs[i], xs[i + 1])) subs.push(tabSolid(false, ys[j], at, connector.zMin - 0.2, connector.slotTop, connector.clearance));
         }
-        if (adds.length) region = region.add(k().Manifold.union(adds).intersect(box(-1e5, 1e5, -1e5, 1e5, -1e5, h)));
+        if (adds.length) region = region.add(k().Manifold.union(adds));
         if (subs.length) region = region.subtract(k().Manifold.union(subs));
       }
       const piece = part.intersect(region);

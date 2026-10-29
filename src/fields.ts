@@ -115,12 +115,12 @@ export const SECTIONS: Section[] = [
       print({ key: 'bedY', label: 'Bed depth', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
       print({ key: 'split', label: 'Split to fit bed', kind: 'toggle', help: 'Cuts along grid lines into the fewest, most even pieces.' }),
       print({
-        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind === 'plate',
+        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind !== 'tile',
         options: [['dovetail', 'Dovetails'], ['none', 'Flat (no connector)']],
       }),
       print({
         key: 'clearance', label: 'Dovetail fit gap', kind: 'number', min: 0, max: 0.6, step: 0.05, unit: 'mm',
-        show: (s) => s.print.split && s.kind === 'plate' && s.print.connector === 'dovetail',
+        show: (s) => s.print.split && s.kind !== 'tile' && s.print.connector === 'dovetail',
         help: 'Per side. Raise it if the joints are too tight.',
       }),
     ],

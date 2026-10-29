@@ -2,9 +2,9 @@ import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from './bin';
 import { buildPlate, plateLayout, type PlateParams } from './baseplate';
 import { buildLid, type LidParams } from './lid';
-import { BASE_TOP_SIZE_GAP, GRID } from './constants';
+import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
-import { DOVETAIL_DEPTH, planSplit, splitPart, type AxisSpec, type Connector, type Piece } from './split';
+import { DOVETAIL_DEPTH, planSplit, splitPart, tabSolid, type AxisSpec, type Connector, type Piece } from './split';
 
 export type PartKind = 'bin' | 'plate' | 'tile' | 'lid';
 export type ConnectorKind = 'dovetail' | 'none';
@@ -98,10 +98,16 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     if (req.print.split && req.print.connector === 'dovetail') {
       if (L.bottom > 0) {
         connector = {
+          zMin: -1,
           height: L.bottom,
+          slotTop: L.bottom + 0.2,
           clearance: req.print.clearance,
-          xTabAt: Array.from({ length: L.y.units }, (_, j) => L.y.padStart + (j + 0.5) * GRID),
-          yTabAt: Array.from({ length: L.x.units }, (_, i) => L.x.padStart + (i + 0.5) * GRID),
+          tabsAt: (axis, _cut, lo, hi) => {
+            const positions = axis === 'x'
+              ? Array.from({ length: L.y.units }, (_, j) => L.y.padStart + (j + 0.5) * GRID)
+              : Array.from({ length: L.x.units }, (_, i) => L.x.padStart + (i + 0.5) * GRID);
+            return positions.filter(v => v > lo && v < hi);
+          },
         };
       } else {
         warnings.push('Thin plates have no bottom layer for dovetails, so pieces butt together flat. Choose a solid or weighted plate for dovetail joints.');
@@ -127,20 +133,73 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
   };
 }
 
+function floorConnector(part: Manifold, x: AxisSpec, y: AxisSpec, floorZ: number, clearance: number, onCut: (count: number) => void): Connector {
+  const bb = part.boundingBox();
+  const cache = new Map<string, number[]>();
+  return {
+    zMin: BASE_PROFILE_HEIGHT, height: floorZ, slotTop: floorZ + 0.2, clearance,
+    tabsAt(axis, cut, lo, hi) {
+      const key = [axis, cut, lo, hi].join(':');
+      const cached = cache.get(key);
+      if (cached) return cached;
+      const spec = axis === 'x' ? y : x;
+      const vAxis = axis === 'x' ? 1 : 0;
+      // At maximum UI clearance, the 5.6 mm slot reach stays short of screw
+      // bores (nearest edge 6.5 mm from a cell boundary); magnets are below this layer.
+      const margin = 5.5 + clearance;
+      const positions: number[] = [];
+      let start = spec.origin;
+      for (const pitch of spec.cells) {
+        const centre = start + pitch / 2;
+        for (const offset of [0, -10.5, 10.5, -7, 7]) {
+          const at = centre + offset;
+          if (at - margin < Math.max(lo, start, bb.min[vAxis]) || at + margin > Math.min(hi, start + pitch, bb.max[vAxis])) continue;
+          const column = tabSolid(axis === 'x', cut, at, floorZ + 0.05, bb.max[2] + 1, clearance);
+          if (column.intersect(part).volume() > 0.01) continue;
+          positions.push(at);
+          break;
+        }
+        start += pitch;
+      }
+      cache.set(key, positions);
+      onCut(positions.length);
+      return positions;
+    },
+  };
+}
+
 export function generate(req: GenerateRequest): GenerateResult {
-  const { part, x, y, connector, base, warnings } = build(req);
+  const { part, x, y, connector: plateConnector, base, warnings } = build(req);
+  let connector = plateConnector;
+  let placed = false;
+  let missing = false;
   const bb = part.boundingBox();
   const size: Vec3 = [bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]];
   const print = req.print;
 
   let pieces: Piece[] = [{ name: base, part, ix: 0, iy: 0 }];
   if (print.split) {
+    if ((req.kind === 'bin' || req.kind === 'lid') && print.connector === 'dovetail') {
+      const floorZ = req.kind === 'bin' ? binLayout(req.bin).floorZ : 7;
+      if (floorZ - BASE_PROFILE_HEIGHT < 1.5) {
+        warnings.push('Floor too thin for dovetails (needs 1.5 mm); pieces join flat');
+      } else {
+        connector = floorConnector(part, x, y, floorZ, print.clearance, count => {
+          placed ||= count > 0;
+          missing ||= count === 0;
+        });
+      }
+    }
     const plan = planSplit(x, y, print.bedX, print.bedY, connector ? DOVETAIL_DEPTH : 0);
     if (!plan) {
       warnings.push('A single grid cell is larger than the print bed, so the part cannot be split to fit.');
     } else if (plan.xCuts.length || plan.yCuts.length) {
       pieces = splitPart(part, plan, connector).map((pc) => ({ ...pc, name: `${base}-${pc.name}` }));
-      if (req.kind === 'bin' || req.kind === 'lid') warnings.push('Split bins and lids join with flat faces: glue the pieces together.');
+      if (req.kind === 'bin' || req.kind === 'lid') {
+        if (missing) warnings.push('No room for a dovetail on one or more cuts: glue those seams');
+        if (placed) warnings.push('Dovetails align the floor; glue the wall seams for strength.');
+        else if (!connector) warnings.push('Split bins and lids join with flat faces: glue the pieces together.');
+      }
     }
   }
 
