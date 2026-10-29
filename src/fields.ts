@@ -1,0 +1,121 @@
+import type { GenerateRequest, PartKind } from './geometry/generate';
+
+export type Group = 'bin' | 'plate' | 'tile' | 'print';
+
+export interface Field {
+  group: Group;
+  key: string;
+  label: string;
+  kind: 'number' | 'select' | 'toggle' | 'range';
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: [string, string][];
+  help?: string;
+  unit?: string;
+  show?: (s: GenerateRequest) => boolean;
+}
+
+export interface Section {
+  title: string;
+  kinds: PartKind[];
+  fields: Field[];
+}
+
+const bin = (f: Omit<Field, 'group'>): Field => ({ group: 'bin', ...f });
+const plate = (f: Omit<Field, 'group'>): Field => ({ group: 'plate', ...f });
+const tile = (f: Omit<Field, 'group'>): Field => ({ group: 'tile', ...f });
+const print = (f: Omit<Field, 'group'>): Field => ({ group: 'print', ...f });
+
+export const SECTIONS: Section[] = [
+  {
+    title: 'Size',
+    kinds: ['bin'],
+    fields: [
+      bin({ key: 'width', label: 'Width', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units', help: '1 unit = 42 mm. Half units allowed.' }),
+      bin({ key: 'depth', label: 'Depth', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units' }),
+      bin({ key: 'height', label: 'Height', kind: 'number', min: 2, max: 24, step: 1, unit: '× 7 mm', help: 'Includes the foot; the stacking lip sits on top.' }),
+    ],
+  },
+  {
+    title: 'Walls and floor',
+    kinds: ['bin'],
+    fields: [
+      bin({ key: 'lip', label: 'Stacking lip', kind: 'select', options: [['normal', 'Standard'], ['none', 'None (flat top)']] }),
+      bin({ key: 'wall', label: 'Wall thickness', kind: 'number', min: 0.8, max: 3, step: 0.05, unit: 'mm' }),
+      bin({ key: 'floor', label: 'Floor thickness', kind: 'number', min: 0.6, max: 6, step: 0.05, unit: 'mm', help: 'Above the 4.75 mm foot. 2.25 matches the standard 7 mm base.' }),
+      bin({ key: 'solid', label: 'Solid bin (no cavity)', kind: 'toggle' }),
+    ],
+  },
+  {
+    title: 'Compartments',
+    kinds: ['bin'],
+    fields: [
+      bin({ key: 'compartmentsX', label: 'Across', kind: 'number', min: 1, max: 12, step: 1, show: (s) => !s.bin.solid }),
+      bin({ key: 'compartmentsY', label: 'Front to back', kind: 'number', min: 1, max: 12, step: 1, show: (s) => !s.bin.solid }),
+      bin({
+        key: 'tab', label: 'Label tab', kind: 'select', show: (s) => !s.bin.solid,
+        options: [['none', 'None'], ['full', 'Full width'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']],
+      }),
+      bin({ key: 'scoop', label: 'Finger scoop', kind: 'range', min: 0, max: 1, step: 0.05, show: (s) => !s.bin.solid, help: 'Curved front edge for scooping out small parts.' }),
+    ],
+  },
+  {
+    title: 'Base holes',
+    kinds: ['bin'],
+    fields: [
+      bin({ key: 'magnets', label: 'Magnet holes (6 × 2 mm)', kind: 'toggle' }),
+      bin({ key: 'screws', label: 'Screw holes (M3)', kind: 'toggle' }),
+      bin({ key: 'cornerHolesOnly', label: 'Outer corners only', kind: 'toggle', show: (s) => s.bin.magnets || s.bin.screws }),
+    ],
+  },
+  {
+    title: 'Baseplate',
+    kinds: ['plate'],
+    fields: [
+      plate({ key: 'width', label: 'Width', kind: 'number', min: 1, max: 30, step: 1, unit: 'units', show: (s) => !(s.plate.drawerW > 0) }),
+      plate({ key: 'depth', label: 'Depth', kind: 'number', min: 1, max: 30, step: 1, unit: 'units', show: (s) => !(s.plate.drawerD > 0) }),
+      plate({ key: 'drawerW', label: 'Fit drawer width', kind: 'number', min: 0, max: 2000, step: 1, unit: 'mm', help: '0 = off. Fills the drawer with whole cells and pads the rest.' }),
+      plate({ key: 'drawerD', label: 'Fit drawer depth', kind: 'number', min: 0, max: 2000, step: 1, unit: 'mm' }),
+      plate({ key: 'alignX', label: 'Padding left ↔ right', kind: 'range', min: -1, max: 1, step: 0.1, show: (s) => s.plate.drawerW > 0, help: 'Left end: all padding on the left. Middle: split evenly.' }),
+      plate({ key: 'alignY', label: 'Padding front ↔ back', kind: 'range', min: -1, max: 1, step: 0.1, show: (s) => s.plate.drawerD > 0 }),
+      plate({ key: 'style', label: 'Style', kind: 'select', options: [['thin', 'Thin (open frame)'], ['solid', 'Solid bottom'], ['weighted', 'Weighted']] }),
+      plate({ key: 'magnets', label: 'Magnet holes (6 × 2 mm)', kind: 'toggle', help: 'Adds a bottom layer to thin plates.' }),
+    ],
+  },
+  {
+    title: 'MultiBoard-compatible tile (experimental)',
+    kinds: ['tile'],
+    fields: [
+      tile({ key: 'cols', label: 'Columns', kind: 'number', min: 1, max: 16, step: 1, unit: '× 25 mm' }),
+      tile({ key: 'rows', label: 'Rows', kind: 'number', min: 1, max: 16, step: 1, unit: '× 25 mm' }),
+      tile({ key: 'edgePegHoles', label: 'Peg holes on edges', kind: 'toggle', help: 'Half peg holes along the outer edge.' }),
+    ],
+  },
+  {
+    title: 'Print bed',
+    kinds: ['bin', 'plate', 'tile'],
+    fields: [
+      print({ key: 'bedX', label: 'Bed width', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
+      print({ key: 'bedY', label: 'Bed depth', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
+      print({ key: 'split', label: 'Split to fit bed', kind: 'toggle', help: 'Cuts along grid lines into the fewest, most even pieces.' }),
+      print({
+        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind === 'plate',
+        options: [['dovetail', 'Dovetails'], ['none', 'Flat (no connector)']],
+      }),
+      print({
+        key: 'clearance', label: 'Dovetail fit gap', kind: 'number', min: 0, max: 0.6, step: 0.05, unit: 'mm',
+        show: (s) => s.print.split && s.kind === 'plate' && s.print.connector === 'dovetail',
+        help: 'Per side. Raise it if the joints are too tight.',
+      }),
+    ],
+  },
+];
+
+export const BED_PRESETS: [string, number, number][] = [
+  ['180²', 180, 180],
+  ['220²', 220, 220],
+  ['250×210', 250, 210],
+  ['256²', 256, 256],
+  ['350²', 350, 350],
+];

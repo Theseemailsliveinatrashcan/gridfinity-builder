@@ -1,0 +1,90 @@
+:root {
+  --bg: #ffffff;
+  --panel: #fbfbfd;
+  --line: #e3e5ea;
+  --text: #1c1f26;
+  --muted: #6b7280;
+  --accent: #4f7cff;
+  --warn-bg: #fff7e6;
+  --warn: #8a5a00;
+  --err-bg: #fdecec;
+  --err: #a32020;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
+#panel {
+  width: 340px;
+  flex: none;
+  overflow-y: auto;
+  background: var(--panel);
+  border-right: 1px solid var(--line);
+  padding: 16px 18px 24px;
+}
+#panel header h1 { font-size: 1.2rem; margin: 0; }
+#panel header p { margin: 4px 0 14px; color: var(--muted); font-size: 0.85rem; }
+
+.kinds { display: flex; gap: 4px; background: #eceef3; padding: 3px; border-radius: 9px; margin-bottom: 14px; }
+.kinds button {
+  flex: 1; border: 0; background: transparent; padding: 7px 4px; border-radius: 7px;
+  font: inherit; font-size: 0.85rem; cursor: pointer; color: var(--muted);
+}
+.kinds button.active { background: #fff; color: var(--text); box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); font-weight: 600; }
+
+fieldset { border: 0; border-top: 1px solid var(--line); margin: 0; padding: 12px 0 6px; }
+legend { font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); padding: 0 6px 0 0; }
+
+.field { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 10px; margin: 8px 0; font-size: 0.9rem; }
+.field small { grid-column: 1 / -1; color: var(--muted); font-size: 0.75rem; }
+.field-toggle { grid-template-columns: auto 1fr; cursor: pointer; }
+.field-range { grid-template-columns: 1fr 120px 38px; }
+.field-range output { font-variant-numeric: tabular-nums; font-size: 0.8rem; color: var(--muted); text-align: right; }
+.with-unit { display: inline-flex; align-items: center; gap: 6px; }
+.unit { color: var(--muted); font-size: 0.8rem; min-width: 44px; }
+input[type='number'], select {
+  font: inherit; font-size: 0.9rem; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+input[type='number'] { width: 78px; }
+input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--accent); }
+input[type='range'] { accent-color: var(--accent); }
+
+.presets { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 2px; }
+.presets button {
+  border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 3px 9px; font-size: 0.78rem; cursor: pointer;
+}
+.presets button.active { border-color: var(--accent); color: var(--accent); }
+
+button.link { border: 0; background: none; color: var(--accent); cursor: pointer; padding: 2px 0; font: inherit; font-size: 0.85rem; text-align: left; }
+button.primary {
+  border: 0; background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer;
+}
+button.primary:hover { filter: brightness(1.07); }
+
+#panel footer { margin-top: 18px; color: var(--muted); font-size: 0.72rem; line-height: 1.45; }
+#panel footer a { color: inherit; }
+
+main { flex: 1; position: relative; min-width: 0; }
+#viewport { position: absolute; inset: 0; }
+#results {
+  position: absolute; left: 16px; bottom: 16px; max-width: min(520px, calc(100% - 32px));
+  background: rgb(255 255 255 / 0.94); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.08);
+}
+#status { font-variant-numeric: tabular-nums; font-size: 0.9rem; margin-bottom: 8px; }
+#warnings { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 6px; }
+#warnings:empty { display: none; }
+#warnings li { background: var(--warn-bg); color: var(--warn); padding: 6px 9px; border-radius: 6px; font-size: 0.8rem; }
+#warnings li.error { background: var(--err-bg); color: var(--err); }
+.pieces { list-style: none; padding: 0; margin: 8px 0 0; max-height: 160px; overflow-y: auto; columns: 2; }
+
+@media (max-width: 760px) {
+  body { flex-direction: column-reverse; height: auto; overflow: auto; }
+  #panel { width: 100%; border-right: 0; border-top: 1px solid var(--line); }
+  main { height: 60vh; flex: none; }
+}
+.fallback-note { position: absolute; top: 10px; right: 12px; font-size: 0.75rem; color: var(--muted); background: rgb(255 255 255 / 0.85); padding: 4px 8px; border-radius: 6px; }
+#viewport canvas { display: block; touch-action: none; }

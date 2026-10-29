@@ -1,0 +1,24 @@
+{
+  "name": "gridfinity-builder",
+  "version": "0.1.0",
+  "description": "Browser-based generator for Gridfinity bins and baseplates (plus experimental MultiBoard-compatible tiles), with print-bed splitting and STL export.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "manifold-3d": "^3.5.4",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.186.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  }
+}
