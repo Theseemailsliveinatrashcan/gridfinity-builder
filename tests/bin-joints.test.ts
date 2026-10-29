@@ -1,5 +1,6 @@
 import type { Manifold } from 'manifold-3d';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { buildBin } from '../src/geometry/bin';
 import { DEFAULTS } from '../src/state';
 import { generate, type GenerateRequest, type MeshOut } from '../src/geometry/generate';
 import { box, cylinderAt, freeAll, initKernel, k } from '../src/geometry/kernel';
@@ -109,16 +110,60 @@ describe('bin and lid dovetails', () => {
     expect(r.warnings).toEqual([glue]);
   });
 
-  it('checks insertion columns around scoops and label tabs', () => {
-    const req = request({ bin: { ...DEFAULTS.bin, width: 6, depth: 2, height: 6, scoop: 1, tab: 'full', compartmentsY: 3 } });
-    const { ms: [a, b] } = pieces(req);
-    const protrusions = a.intersect(box(0.001, 6, -50, 50, 4.75, 7));
-    if (protrusions.volume() > 0) {
-      const column = protrusions.slice(6).extrude(50).translate([0, 0, 7.05]);
-      expect(column.intersect(b).volume()).toBeLessThan(0.01);
-    } else {
-      expect(generate(req).warnings).toContain(noRoom);
+  it('checks every clearance-expanded insertion column on X and Y offset tabs', () => {
+    const clearance = SECTIONS.flatMap(s => s.fields).find(f => f.key === 'clearance')!.max!;
+    for (const axis of ['x', 'y'] as const) {
+      const isX = axis === 'x';
+      const req = request({ bin: { ...DEFAULTS.bin, width: isX ? 6 : 2, depth: isX ? 2 : 6, height: 6,
+        compartmentsX: isX ? 1 : 4, compartmentsY: isX ? 4 : 1 } });
+      req.print.clearance = clearance;
+      const { r, ms: [a] } = pieces(req);
+      expect(r.warnings).toContain(glue);
+      const tabs = a.intersect(isX ? box(0.001, 6, -50, 50, 4.75, 7) : box(-50, 50, 0.001, 6, 4.75, 7)).decompose();
+      expect(tabs.length).toBeGreaterThan(0);
+      const original = buildBin(req.bin);
+      const centres = tabs.map(tab => {
+        const bb = tab.boundingBox();
+        const v = isX ? 1 : 0;
+        return (bb.min[v] + bb.max[v]) / 2;
+      });
+      expect(centres.some(at => Math.abs(Math.abs(at) - 21) > 1)).toBe(true);
+      for (const at of centres) {
+        const column = tabSolid(isX, 0, at, 7.05, original.boundingBox().max[2] + 1, clearance);
+        expect(column.intersect(original).volume()).toBeLessThan(0.01);
+      }
     }
+  });
+
+  for (const [width, depth, bedX, bedY] of [[6, 2, 126, 100], [2, 1, 42, 42]]) {
+    it(`replans blocked ${width}×${depth} bins flat on a ${bedX}×${bedY} bed`, () => {
+      const req = request({ bin: { ...DEFAULTS.bin, width, depth, height: 3, solid: true } });
+      req.print = { ...req.print, bedX, bedY };
+      const { r } = pieces(req);
+      const flat = generate({ ...req, print: { ...req.print, connector: 'none' } });
+      expect(r.pieces).toHaveLength(2);
+      expect(r.pieces.map(p => [p.min, p.max])).toEqual(flat.pieces.map(p => [p.min, p.max]));
+      expect(r.warnings).toContain(width === 6 ? noRoom : 'Dovetails need 5 mm of extra room per piece; this bed only fits flat joints');
+      expect(r.warnings).not.toContain(glue);
+      expect(r.warnings.some(w => w.includes('single grid cell'))).toBe(false);
+    });
+  }
+
+  it('keeps the tab-reserving plan when some cuts have tabs', () => {
+    const req = request({ bin: { ...DEFAULTS.bin, width: 6, depth: 2, height: 6, scoop: 1 } });
+    req.print = { ...req.print, bedX: 126, bedY: 100 };
+    const { r } = pieces(req);
+    expect(r.pieces).toHaveLength(3);
+    expect(r.warnings).toContain(glue);
+    expect(generate({ ...req, print: { ...req.print, connector: 'none' } }).pieces).toHaveLength(2);
+  });
+
+  it('replans blocked stackable lids with the flat piece count', () => {
+    const req = request({ kind: 'lid', lid: { ...DEFAULTS.lid, width: 6, depth: 2, style: 'stackable' } });
+    req.print = { ...req.print, bedX: 126, bedY: 100 };
+    const { r } = pieces(req);
+    expect(r.pieces).toHaveLength(2);
+    expect(r.warnings).toContain(noRoom);
   });
 
   it('exposes joint settings for bins/lids/plates and hides them for tiles', () => {

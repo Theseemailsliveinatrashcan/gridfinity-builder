@@ -190,11 +190,22 @@ export function generate(req: GenerateRequest): GenerateResult {
         });
       }
     }
-    const plan = planSplit(x, y, print.bedX, print.bedY, connector ? DOVETAIL_DEPTH : 0);
+    let plan = planSplit(x, y, print.bedX, print.bedY, connector ? DOVETAIL_DEPTH : 0);
+    if (!plan && connector) {
+      connector = undefined;
+      plan = planSplit(x, y, print.bedX, print.bedY);
+      if (plan) warnings.push('Dovetails need 5 mm of extra room per piece; this bed only fits flat joints');
+    }
     if (!plan) {
       warnings.push('A single grid cell is larger than the print bed, so the part cannot be split to fit.');
     } else if (plan.xCuts.length || plan.yCuts.length) {
-      pieces = splitPart(part, plan, connector).map((pc) => ({ ...pc, name: `${base}-${pc.name}` }));
+      let split = splitPart(part, plan, connector);
+      if (connector && !placed && (req.kind === 'bin' || req.kind === 'lid')) {
+        connector = undefined;
+        plan = planSplit(x, y, print.bedX, print.bedY)!;
+        split = splitPart(part, plan);
+      }
+      pieces = split.map((pc) => ({ ...pc, name: `${base}-${pc.name}` }));
       if (req.kind === 'bin' || req.kind === 'lid') {
         if (missing) warnings.push('No room for a dovetail on one or more cuts: glue those seams');
         if (placed) warnings.push('Dovetails align the floor; glue the wall seams for strength.');
