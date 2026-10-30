@@ -437,12 +437,30 @@ export function buildBin(p: BinParams): Manifold {
   return result;
 }
 
-/** Approximate one 0.45 mm wall and a 1.2 mm bottom, using PLA at 1.24 g/cm³. */
+/** Derive the layer where the actual base becomes one contour, then estimate PLA. */
+export function vasePrintStats(p: BinParams, part = buildBin({ ...p, vase: true })) {
+  const bb = part.boundingBox(), epsilon = 1e-6;
+  let lo = bb.min[2], hi = bb.max[2] - epsilon;
+  if (part.slice(lo + epsilon).numContour() === 1) hi = lo;
+  else {
+    if (part.slice(hi).numContour() !== 1) throw new Error('Vase model never reaches a single contour.');
+    while (hi - lo > epsilon) {
+      const mid = (lo + hi) / 2;
+      if (part.slice(mid).numContour() === 1) hi = mid; else lo = mid;
+    }
+  }
+  const bottomHeight = +(Math.ceil((Math.max(1.2, hi - bb.min[2]) - epsilon) / 0.2) * 0.2).toFixed(1);
+  const transition = bb.min[2] + bottomHeight;
+  const solidVolume = part.intersect(box(bb.min[0] - 1, bb.max[0] + 1, bb.min[1] - 1, bb.max[1] + 1, bb.min[2] - 1, transition)).volume();
+  const contours = part.slice(Math.min(bb.max[2] - epsilon, Math.max(transition, BASE_PROFILE_HEIGHT) + epsilon)).toPolygons();
+  const perimeter = contours.reduce((sum, points) => sum + points.reduce((length, point, i) => {
+    const next = points[(i + 1) % points.length];
+    return length + Math.hypot(next[0] - point[0], next[1] - point[1]);
+  }, 0), 0);
+  const grams = (solidVolume + perimeter * Math.max(0, bb.max[2] - transition) * 0.45) * 1.24 / 1000;
+  return { joinHeight: hi - bb.min[2], bottomHeight, layers: Math.round(bottomHeight / 0.2), solidVolume, perimeter, grams };
+}
+
 export function vaseGrams(p: BinParams): number {
-  const L = binLayout(p);
-  const r = Math.min(BASE_TOP_RADIUS, L.outerW / 2, L.outerD / 2);
-  const perimeter = 2 * (L.outerW + L.outerD - 4 * r) + 2 * Math.PI * r;
-  const area = L.outerW * L.outerD - (4 - Math.PI) * r * r;
-  const height = L.top + (p.lip === 'normal' ? LIP_HEIGHT - LIP_TIP_TRIM : 0);
-  return (perimeter * height * 0.45 + area * 1.2) * 1.24 / 1000;
+  return vasePrintStats(p).grams;
 }

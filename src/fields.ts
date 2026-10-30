@@ -61,7 +61,7 @@ export const SECTIONS: Section[] = [
     title: 'Walls and floor',
     kinds: ['bin'],
     fields: [
-      bin({ key: 'vase', label: 'Vase-mode bin', kind: 'toggle', help: 'Solid outer model for spiral slicing; no stacking socket or matching lid. Multiple feet need solid layers to 4.75 mm.' }),
+      bin({ key: 'vase', label: 'Vase-mode bin', kind: 'toggle', help: 'Solid outer model for spiral slicing; see generated bottom-layer settings. No stacking socket or matching lid.' }),
       bin({ key: 'lip', label: 'Stacking lip', kind: 'select', options: [['normal', 'Standard'], ['none', 'None (flat top)']] }),
       bin({ key: 'withLid', label: 'Include matching lid', kind: 'toggle', help: 'Adds a lid with the same footprint and magnet setting. Requires the stacking lip.', show: s => !s.bin.vase }),
       bin({ key: 'lidStyle', label: 'Lid style', kind: 'select', options: [['flat', 'Flat'], ['stackable', 'Stackable']], show: s => !s.bin.vase && s.bin.withLid }),

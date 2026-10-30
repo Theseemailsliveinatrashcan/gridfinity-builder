@@ -1,7 +1,7 @@
 import { dividerLayout, printableDivider } from './dividers';
 import { unionAll } from './kernel';
 import type { Manifold, Vec3 } from 'manifold-3d';
-import { binLayout, vaseBinParams, vaseGrams, buildBin, buildLabelCard, labelCardSlots, cellPitches, validateBin, type BinParams } from './bin';
+import { binLayout, vaseBinParams, vasePrintStats, buildBin, buildLabelCard, labelCardSlots, cellPitches, validateBin, type BinParams } from './bin';
 import { buildPlate, plateLayout, plateHardwareCutters, type PlateParams } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
@@ -77,7 +77,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     const errors = validateBin(p);
     if (p.vase) {
       warnings.push("Vase-mode bins can't stack on each other");
-      if (cellPitches(p.width).length * cellPitches(p.depth).length > 1) warnings.push('Multiple feet need solid bottom layers through 4.75 mm before the spiral wall begins.');
+
     }
     if (p.labelSlot === 'card' && p.tab !== 'none') warnings.push('Label tab replaced by the label card slot');
     if (p.labelSlot === 'card' && p.solid) warnings.push('Label card slots need a hollow bin');
@@ -86,11 +86,13 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     const ys = cellPitches(p.depth);
     const L = binLayout(p);
     const gap = -(p.width * GRID - L.outerW) / 2;
+    const part = buildBin(p);
+    const vase = p.vase ? vasePrintStats(p, part) : undefined;
     return {
-      part: buildBin(p),
+      part,
       x: { cells: xs, padStart: gap, padEnd: gap, origin: -(p.width * GRID) / 2 },
       y: { cells: ys, padStart: gap, padEnd: gap, origin: -(p.depth * GRID) / 2 },
-      info: p.vase ? ['Print in spiral/vase mode: 1 wall, 0 top layers, ~6 bottom layers (bottom ≥ 1.2 mm)', `≈ ${vaseGrams(p).toFixed(1)} g in vase mode (PLA, 0.45 mm line width)`] : p.labelSlot === 'cullenect' && !p.solid ? ['Cullenect V2 labels: gflabel — https://github.com/ndevenish/gflabel (use cullenect v2.0.0 or v2+)'] : [],
+      info: vase ? [vase.layers > 6 ? `Print in spiral/vase mode: 1 wall, 0 top layers; solid bottom layers through ${vase.bottomHeight} mm (e.g. ${vase.layers} × 0.2 mm), then spiral` : 'Print in spiral/vase mode: 1 wall, 0 top layers, ~6 bottom layers (bottom ≥ 1.2 mm)', `≈ ${vase.grams.toFixed(1)} g in vase mode (PLA, 0.45 mm line width)`] : p.labelSlot === 'cullenect' && !p.solid ? ['Cullenect V2 labels: gflabel — https://github.com/ndevenish/gflabel (use cullenect v2.0.0 or v2+)'] : [],
       base: `gridfinity-bin-${p.width}x${p.depth}x${p.heightMode === 'internal' ? `${p.internalDepth}mm` : p.height}`,
       warnings,
     };
