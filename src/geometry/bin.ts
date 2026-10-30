@@ -279,7 +279,8 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
           let start = cx0;
           if (p.tab === 'center') start = cx0 + (compW - tw) / 2;
           if (p.tab === 'right') start = cx0 + compW - tw;
-          parts.push(extrudeAlongX(profile, start, start + tw));
+          // Overlap the side walls slightly, like the fillet strips, so no zero-thickness sheets remain.
+          parts.push(extrudeAlongX(profile, start - 0.01, start + tw + 0.01));
         }
       }
     }

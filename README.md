@@ -11,6 +11,8 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 - Standard stacking lip or flat top, wall and floor thickness
 - Compartments in both directions, label tabs (full, left, center, right), finger scoops
 - Solid bins, magnet holes (6 × 2 mm), M3 screw holes, holes at outer corners only
+- Scoops on the front wall only, or on all four sides for trays
+- Optionally download a matching flat lid with the bin
 
 **Lids**
 - Seat in a bin's stacking lip; flat, or stackable with baseplate sockets on top

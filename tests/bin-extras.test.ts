@@ -98,3 +98,31 @@ describe('all-side bin scoops', () => {
     expect(sanitize({ bin: { scoopSides: 'invalid' } }).bin.scoopSides).toBe('front');
   });
 });
+
+describe('review regressions', () => {
+  it('6x6 all-side scoops with full tabs is one solid with no slivers', async () => {
+    const { buildBin, defaultBin } = await import('../src/geometry/bin');
+    const { initKernel, freeAll } = await import('../src/geometry/kernel');
+    const k = await initKernel();
+    const m = buildBin({ ...defaultBin, width: 6, depth: 6, compartmentsX: 6, compartmentsY: 6, scoop: 1, scoopSides: 'all', tab: 'full' });
+    expect(m.status()).toBe('NoError');
+    expect(m.genus()).toBe(0);
+    expect(m.decompose().length).toBe(1);
+    const rebuilt = new k.Manifold(m.getMesh());
+    expect(rebuilt.status()).toBe('NoError');
+    rebuilt.delete();
+    freeAll();
+  });
+
+  it('matching lid is previewed beside the bin, not inside it', async () => {
+    const { generate } = await import('../src/geometry/generate');
+    const { DEFAULTS } = await import('../src/state');
+    const { initKernel, freeAll } = await import('../src/geometry/kernel');
+    await initKernel();
+    const r = generate({ ...DEFAULTS, bin: { ...DEFAULTS.bin, withLid: true } });
+    const [bin, lid] = r.pieces;
+    expect(lid.name.endsWith('-lid')).toBe(true);
+    expect(lid.min[0]).toBeGreaterThan(bin.max[0]);
+    freeAll();
+  });
+});

@@ -271,6 +271,12 @@ function generatePart(req: GenerateRequest): GenerateResult {
   return { pieces: out, warnings, info, size };
 }
 
+function shiftX(p: MeshOut, dx: number): MeshOut {
+  const positions = p.positions.slice();
+  for (let i = 0; i < positions.length; i += 3) positions[i] += dx;
+  return { ...p, positions, min: [p.min[0] + dx, p.min[1], p.min[2]], max: [p.max[0] + dx, p.max[1], p.max[2]] };
+}
+
 export function generate(req: GenerateRequest): GenerateResult {
   const result = generatePart(req);
   if (req.kind !== 'bin' || !req.bin.withLid) return result;
@@ -283,7 +289,10 @@ export function generate(req: GenerateRequest): GenerateResult {
   } });
   const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
   const lidBase = `gridfinity-lid-${req.bin.width}x${req.bin.depth}`;
-  result.pieces.push(...lid.pieces.map(piece => ({ ...piece, name: piece.name.replace(lidBase, `${base}-lid`) })));
+  // Park the lid beside the bin so previews don't draw it through the bin floor.
+  // Exports re-centre every piece, so this only affects the preview.
+  const shift = Math.max(...result.pieces.map((p) => p.max[0])) - Math.min(...lid.pieces.map((p) => p.min[0])) + 15;
+  result.pieces.push(...lid.pieces.map((piece) => ({ ...shiftX(piece, shift), name: piece.name.replace(lidBase, `${base}-lid`) })));
   result.warnings = [...new Set([...result.warnings, ...lid.warnings])];
   return result;
 }

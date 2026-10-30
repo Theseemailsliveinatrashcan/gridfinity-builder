@@ -372,7 +372,8 @@ function showResult(r: GenerateResult, ms: number): void {
       const li = document.createElement('li');
       const a = document.createElement('button');
       a.className = 'link';
-      a.textContent = `${p.name.replace(/^.*-(piece-)/, '$1')} · ${mm(p.max[0] - p.min[0])} × ${mm(p.max[1] - p.min[1])} mm${p.fitsBed ? '' : ' (too big)'}`;
+      const role = p.name.startsWith(base) ? p.name.slice(base.length + 1) : p.name;
+      a.textContent = `${role || 'bin'} · ${mm(p.max[0] - p.min[0])} × ${mm(p.max[1] - p.min[1])} mm${p.fitsBed ? '' : ' (too big)'}`;
       a.onclick = () => single(p);
       li.append(a);
       list.append(li);
