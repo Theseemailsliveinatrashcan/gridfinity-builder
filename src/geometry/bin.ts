@@ -52,6 +52,8 @@ export interface BinParams {
   floor: number;
   lip: LipStyle;
   withLid: boolean;
+  lidStyle: 'flat' | 'stackable';
+  lidGrip: boolean;
   compartmentsX: number;
   compartmentsY: number;
   tab: TabStyle;
@@ -76,6 +78,8 @@ export const defaultBin: BinParams = {
   floor: 2.25,
   lip: 'normal',
   withLid: false,
+  lidStyle: 'flat',
+  lidGrip: false,
   compartmentsX: 1,
   compartmentsY: 1,
   tab: 'none',
