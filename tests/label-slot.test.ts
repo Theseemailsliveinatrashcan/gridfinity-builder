@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { binLayout, buildBin, buildLabelCard, defaultBin, labelCardChannel, labelCardSlots } from '../src/geometry/bin';
+import { binLayout, buildBin, buildLabelCard, defaultBin, labelCardChannel, labelCardSlots, labelCardSweep } from '../src/geometry/bin';
+import { buildLid, defaultLid } from '../src/geometry/lid';
 import { box, freeAll, initKernel } from '../src/geometry/kernel';
 import { generate } from '../src/geometry/generate';
 import { DEFAULTS, decodeState, encodeState, sanitize } from '../src/state';
@@ -28,7 +29,8 @@ describe('label card slots', () => {
             expect(b.max[axis] - a.max[axis]).toBeLessThan(0.3);
           }
           // A full channel-sized probe can drop vertically through the open top.
-          const probe = labelCardChannel(slot, p.cardPlay - 0.01, binLayout(p).floorZ + 6).intersect(box(-500, 500, -500, 500, binLayout(p).floorZ + 4.1, binLayout(p).floorZ + 5.1));
+          const probe = labelCardSweep(slot, p.cardPlay, m);
+          expect(probe.boundingBox().max[2]).toBeGreaterThan(m.boundingBox().max[2]);
           expect(Math.abs(probe.intersect(m).volume())).toBeLessThan(1e-6);
         }
       }
@@ -83,6 +85,55 @@ describe('label card slots', () => {
     const r = generate({ ...DEFAULTS, bin: { ...defaultBin, width: 6, labelSlot: 'card' }, print: { ...DEFAULTS.print, split: true, bedX: 60, bedY: 60 } });
     expect(r.pieces.find(p => p.name.includes('-label-card-'))!.fitsBed).toBe(false);
     expect(r.warnings).toContain('Label card is larger than the print bed.');
+  });
+
+  it('rejects the narrow outer-compartment lip collision and permits minimum-width cards that pass', () => {
+    const p = { ...defaultBin, width: 3.5, depth: 1, compartmentsX: 6, labelSlot: 'card' as const };
+    const bare = buildBin({ ...p, labelSlot: 'none' });
+    const L = binLayout(p), w = (L.cavW - 5 * 1.2) / 6;
+    const oldSlot = { width: 20, cx: -L.cavW / 2 + w / 2, backWall: L.cavD / 2,
+      backY: L.cavD / 2 - (2.6 - L.wall + 1.5), bottomZ: L.floorZ + 0.8 };
+    expect(labelCardSweep(oldSlot, p.cardPlay, bare).intersect(bare).volume()).toBeGreaterThan(0.1);
+    expect(() => buildBin(p)).toThrow('Compartments too narrow for label cards');
+    expect(() => generate({ ...DEFAULTS, bin: p })).toThrow('Compartments too narrow for label cards');
+    // Thicker walls put the minimum-width cards farther inside the lip outline.
+    const valid = { ...p, wall: 2 };
+    const m = buildBin(valid), slots = labelCardSlots(valid);
+    expect(slots).toHaveLength(6);
+    expect(slots.every(slot => slot.width === 20)).toBe(true);
+    for (const slot of slots) expect(Math.abs(labelCardSweep(slot, valid.cardPlay, m).intersect(m).volume())).toBeLessThan(1e-7);
+  });
+
+  it('shrinks oversized card footprints until their full play envelope clears the lip', () => {
+    const p = { ...defaultBin, labelSlot: 'card' as const, cardPlay: 0.5 };
+    const m = buildBin(p), slots = labelCardSlots(p);
+    expect(slots[0].width).toBeLessThan(binLayout(p).cavW - 4);
+    expect(slots[0].width).toBeGreaterThanOrEqual(20);
+    for (const slot of slots) expect(Math.abs(labelCardSweep(slot, p.cardPlay, m).intersect(m).volume())).toBeLessThan(1e-7);
+  });
+
+  it('rejects too-short bins with lids and keeps assembled cards clear of valid lids', () => {
+    const p = { ...defaultBin, height: 2, labelSlot: 'card' as const, withLid: true };
+    expect(() => generate({ ...DEFAULTS, bin: p })).toThrow('Bin too short for label cards with a lid (needs 3 units)');
+    expect(() => buildBin({ ...p, floor: 6, height: 3 })).toThrow('needs 4 units');
+    for (const valid of [{ ...p, height: 3 }, { ...p, floor: 6, height: 4 }, { ...p, heightMode: 'internal' as const, internalDepth: 11 }]) {
+      const bin = buildBin(valid), L = binLayout(valid);
+      const lid = buildLid({ ...defaultLid, width: valid.width, depth: valid.depth }).translate([0, 0, L.top]);
+      expect(bin.status()).toBe('NoError');
+      for (const slot of labelCardSlots(valid)) {
+        const card = buildLabelCard(slot.width).rotate([90, 0, 0]).translate([slot.cx, slot.backY, slot.bottomZ]);
+        expect(card.boundingBox().max[2]).toBeLessThanOrEqual(L.top - 0.5);
+        expect(Math.abs(card.intersect(lid).volume())).toBeLessThan(1e-6);
+        expect(Math.abs(labelCardSweep(slot, valid.cardPlay, bin).intersect(bin).volume())).toBeLessThan(1e-7);
+      }
+    }
+  });
+
+  it('warns about cards above the lip when no lid is fitted', () => {
+    const p = { ...defaultBin, height: 2, labelSlot: 'card' as const };
+    const short = generate({ ...DEFAULTS, bin: p });
+    expect(short.warnings).toContain('Label cards extend above the lip top');
+    expect(generate({ ...DEFAULTS, bin: { ...p, height: 3 } }).warnings).not.toContain('Label cards extend above the lip top');
   });
 
   it('keeps card settings valid through sanitizer and shared links', () => {

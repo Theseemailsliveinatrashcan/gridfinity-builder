@@ -225,6 +225,10 @@ export function labelCardSlots(p: BinParams, L = binLayout(p)): LabelCardSlot[] 
   const width = Math.max(20, Math.min(80, w - 4));
   const backInset = (p.lip === 'normal' ? LIP_DEPTH - L.wall : 0) + 1.5;
   if (w < width + 2 * p.cardPlay + 1.6 + 0.2 || d < backInset + 1 + p.cardPlay + 2.6) throw new Error('Compartment too small for a label card slot; reduce compartments or enlarge the bin.');
+  const cardTop = L.floorZ + 0.8 + 12;
+  if (p.withLid && p.lip === 'normal' && cardTop > L.top - 0.5 + 1e-9) {
+    throw new Error(`Bin too short for label cards with a lid (needs ${Math.ceil((cardTop + 0.5) / HEIGHT_UNIT)} units)`);
+  }
   if (L.interiorTop - L.floorZ < 4) throw new Error('Label card slots need at least 4 mm of inside height.');
   const slots: LabelCardSlot[] = [];
   for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
@@ -232,7 +236,27 @@ export function labelCardSlots(p: BinParams, L = binLayout(p)): LabelCardSlot[] 
     slots.push({ width: +width.toFixed(4), cx: -L.cavW / 2 + i * (w + DIVIDER_THICKNESS) + w / 2,
       backY: backWall - backInset, bottomZ: L.floorZ + 0.8, backWall });
   }
+  // Validate against real walls, dividers and the complete stacking lip, not just
+  // the low channel. Scoops are cleared by the channel construction below.
+  const shell = buildBin({ ...p, labelSlot: 'none', tab: 'none', scoop: 0, withLid: false });
+  for (const slot of slots) {
+    const fits = () => Math.abs(labelCardSweep(slot, p.cardPlay, shell).intersect(shell).volume()) < 1e-7;
+    if (fits()) continue;
+    const maximum = slot.width;
+    slot.width = 20;
+    if (!fits()) throw new Error('Compartments too narrow for label cards');
+    let lo = 20, hi = maximum;
+    while (hi - lo > 0.0001) {
+      slot.width = (lo + hi) / 2;
+      if (fits()) lo = slot.width; else hi = slot.width;
+    }
+    slot.width = Math.floor(lo * 10000) / 10000;
+  }
   return slots;
+}
+
+export function labelCardSweep(slot: LabelCardSlot, play: number, bin: Manifold): Manifold {
+  return labelCardChannel(slot, play, Math.max(bin.boundingBox().max[2] + 1, slot.bottomZ + 13));
 }
 
 export function labelCardChannel(slot: LabelCardSlot, play: number, top: number): Manifold {
@@ -267,7 +291,7 @@ function scoopProfile(edge: number, floor: number, radius: number): Vec2[] {
   return profile;
 }
 
-function interior(p: BinParams, L: BinLayout): Manifold | undefined {
+function interior(p: BinParams, L: BinLayout, slots: LabelCardSlot[]): Manifold | undefined {
   if (p.solid) return undefined;
   const { cavW, cavD, floorZ, interiorTop } = L;
   const t = DIVIDER_THICKNESS;
@@ -340,7 +364,6 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
     }
   }
 
-  const slots = labelCardSlots(p, L);
   for (const slot of slots) parts.push(labelCardRail(slot, p.cardPlay, floorZ));
   const all = unionAll(parts);
   if (!all) return undefined;
@@ -353,6 +376,7 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
 
 export function buildBin(p: BinParams): Manifold {
   const L = binLayout(p);
+  const slots = labelCardSlots(p, L);
   const xs = cellPitches(p.width);
   const ys = cellPitches(p.depth);
   const cxs = cellCentres(xs);
@@ -378,6 +402,10 @@ export function buildBin(p: BinParams): Manifold {
   }
   solid = subtractAll(solid, cutters);
 
-  const inside = interior(p, L);
-  return inside ? solid.add(inside) : solid;
+  const inside = interior(p, L, slots);
+  const result = inside ? solid.add(inside) : solid;
+  for (const slot of slots) {
+    if (Math.abs(labelCardSweep(slot, p.cardPlay, result).intersect(result).volume()) > 1e-7) throw new Error('Compartments too narrow for label cards');
+  }
+  return result;
 }

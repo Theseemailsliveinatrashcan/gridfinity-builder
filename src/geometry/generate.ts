@@ -5,7 +5,7 @@ import { buildPlate, plateLayout, plateHardwareCutters, type PlateParams } from 
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
 import { buildLid, defaultLid, type LidParams } from './lid';
-import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID } from './constants';
+import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID, LIP_HEIGHT, LIP_TIP_TRIM } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
 import { DOVETAIL_DEPTH, planSplit, splitPart, tabSolid, type AxisSpec, type Connector, type Piece } from './split';
 
@@ -287,7 +287,11 @@ export function generate(req: GenerateRequest): GenerateResult {
   const result = generatePart(req);
   if (req.kind !== 'bin') return result;
   const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
-  const widths = new Set(labelCardSlots(req.bin).map(slot => slot.width));
+  const slots = labelCardSlots(req.bin);
+  const widths = new Set(slots.map(slot => slot.width));
+  const L = binLayout(req.bin);
+  const lipTop = req.bin.lip === 'normal' ? L.top + LIP_HEIGHT - LIP_TIP_TRIM : L.top;
+  if ((!req.bin.withLid || req.bin.lip !== 'normal') && slots.some(slot => slot.bottomZ + 12 > lipTop + 1e-9)) result.warnings.push('Label cards extend above the lip top');
   // Lay cards out in a row in front of the bin (preview only).
   let cardY = Math.min(...result.pieces.map((p) => p.min[1])) - 10;
   for (const width of widths) {
