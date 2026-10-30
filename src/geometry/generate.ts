@@ -1,6 +1,7 @@
+import { unionAll } from './kernel';
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from './bin';
-import { buildPlate, plateLayout, type PlateParams } from './baseplate';
+import { buildPlate, plateLayout, plateHardwareCutters, type PlateParams } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
 import { buildLid, type LidParams } from './lid';
@@ -128,26 +129,33 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     let connector: Connector | undefined;
     if (req.print.split && req.print.connector === 'dovetail') {
       if (L.bottom > 0) {
+        const hardware = unionAll(plateHardwareCutters(p, L));
         connector = {
           zMin: -1,
           height: L.bottom,
           slotTop: L.bottom + 0.2,
           clearance: req.print.clearance,
-          tabsAt: (axis, _cut, lo, hi) => {
-            const positions = axis === 'x'
-              ? Array.from({ length: L.y.units }, (_, j) => L.y.padStart + (j + 0.5) * GRID)
-              : Array.from({ length: L.x.units }, (_, i) => L.x.padStart + (i + 0.5) * GRID);
-            return positions.filter(v => v > lo && v < hi);
+          tabsAt: (axis, cut, lo, hi) => {
+            const positions = axis === 'x' ? L.y.centres : L.x.centres;
+            const margin = 5.5 + req.print.clearance;
+            return positions.filter(at => {
+              if (at - margin < lo || at + margin > hi) return false;
+              const slot = tabSolid(axis === 'x', cut, at, -1.2, L.bottom + 0.2, req.print.clearance);
+              return !hardware || slot.intersect(hardware).volume() < 1e-9;
+            });
           },
         };
       } else {
         warnings.push('Thin plates have no bottom layer for dovetails, so pieces butt together flat. Choose a solid or weighted plate for dovetail joints.');
       }
     }
+    const axis = (a: typeof L.x): AxisSpec => a.cells.length
+      ? { cells: a.cells, padStart: a.padStart, padEnd: a.padEnd, origin: a.padStart }
+      : { cells: [a.length], padStart: 0, padEnd: 0, origin: 0 };
     return {
       part: buildPlate(p),
-      x: { cells: L.x.cells, padStart: L.x.padStart, padEnd: L.x.padEnd, origin: L.x.padStart },
-      y: { cells: L.y.cells, padStart: L.y.padStart, padEnd: L.y.padEnd, origin: L.y.padStart },
+      x: axis(L.x),
+      y: axis(L.y),
       connector,
       base: `gridfinity-baseplate-${L.x.units}x${L.y.units}`,
       warnings,
@@ -221,6 +229,15 @@ export function generate(req: GenerateRequest): GenerateResult {
         });
       }
     }
+    if (connector && req.kind === 'plate') {
+      const tabsAt = connector.tabsAt;
+      connector = { ...connector, tabsAt: (...args) => {
+        const positions = tabsAt(...args);
+        placed ||= positions.length > 0;
+        missing ||= positions.length === 0;
+        return positions;
+      } };
+    }
     let plan = planSplit(x, y, print.bedX, print.bedY, connector ? DOVETAIL_DEPTH : 0);
     if (!plan && connector) {
       connector = undefined;
@@ -231,12 +248,13 @@ export function generate(req: GenerateRequest): GenerateResult {
       warnings.push('A single grid cell is larger than the print bed, so the part cannot be split to fit.');
     } else if (plan.xCuts.length || plan.yCuts.length) {
       let split = splitPart(part, plan, connector);
-      if (connector && !placed && (req.kind === 'bin' || req.kind === 'lid')) {
+      if (connector && !placed) {
         connector = undefined;
         plan = planSplit(x, y, print.bedX, print.bedY)!;
         split = splitPart(part, plan);
       }
       pieces = split.map((pc) => ({ ...pc, name: `${base}-${pc.name}` }));
+      if (req.kind === 'plate' && missing) warnings.push('No room for a dovetail on one or more cuts: glue those seams');
       if (req.kind === 'holder') warnings.push('Split holders join with flat faces: glue the pieces together.');
       if (req.kind === 'bin' || req.kind === 'lid') {
         if (missing) warnings.push('No room for a dovetail on one or more cuts: glue those seams');

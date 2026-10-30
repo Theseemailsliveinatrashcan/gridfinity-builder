@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { buildPlate, defaultPlate, plateLayout } from '../src/geometry/baseplate';
+import { buildPlate, defaultPlate, plateLayout, plateHardwareCutters } from '../src/geometry/baseplate';
 import { buildBin, defaultBin } from '../src/geometry/bin';
-import { freeAll, initKernel } from '../src/geometry/kernel';
+import { box, cylinderAt, freeAll, initKernel, unionAll } from '../src/geometry/kernel';
 import { planSplit } from '../src/geometry/split';
 import { DEFAULTS, sanitize } from '../src/state';
 import { generate } from '../src/geometry/generate';
@@ -51,6 +51,19 @@ describe('drawer half-cell fill', () => {
     for (const style of ['solid', 'weighted'] as const) {
       const params = { ...p, style, magnets: true, mountHoles: 'counterbore' as const };
       expect(buildPlate(params).status()).toBe('NoError');
+    }
+    const weighted = { ...p, drawerW: 63, drawerD: 42, alignX: 1, alignY: 0, style: 'weighted' as const, magnets: true };
+    const m = buildPlate(weighted);
+    const halfFloor = box(7, 14, 17, 25, 0, 4);
+    expect(m.intersect(halfFloor).volume()).toBeCloseTo(halfFloor.volume(), 6);
+    expect(m.intersect(box(39, 45, 17, 25, 0, 4)).volume()).toBeLessThan(1e-6);
+    const hardware = unionAll(plateHardwareCutters(weighted))!;
+    expect(hardware.intersect(box(0, 21, 0, 42, -1, 7)).volume()).toBeLessThan(1e-6);
+    for (const mountHoles of ['countersink', 'counterbore'] as const) {
+      const params = { ...weighted, style: 'solid' as const, magnets: false, mountHoles };
+      const bore = cylinderAt(10.5, 21, 0, 0.5, 1);
+      expect(buildPlate(params).intersect(bore).volume()).toBeLessThan(1e-6);
+      expect(unionAll(plateHardwareCutters(params))!.intersect(bore).volume()).toBeCloseTo(bore.volume(), 6);
     }
     expect(sanitize({ plate: { halfCells: true } }).plate.halfCells).toBe(true);
     expect(plateLayout({ ...defaultPlate, halfCells: true }).x.cells).toEqual([42, 42, 42]);

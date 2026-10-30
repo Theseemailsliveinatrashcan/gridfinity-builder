@@ -127,33 +127,41 @@ export function buildPlate(p: PlateParams): Manifold {
       const cx = L.x.centres[i];
       const cy = L.y.centres[j];
       const cellW = L.x.cells[i], cellD = L.y.cells[j];
-      const whole = cellW === GRID && cellD === GRID;
       cutters.push(socketCutter(cellW, cellD, cx, cy, L.bottom));
-
-      if (p.magnets && L.bottom > 0 && whole) {
-        for (const sx of [-1, 1]) {
-          for (const sy of [-1, 1]) {
-            cutters.push(
-              cylinderAt(cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, L.bottom - MAGNET_DEPTH, L.bottom + 0.01, MAGNET_DIAMETER / 2),
-            );
-          }
-        }
-      }
-      // Weighted cells keep their underside weight pocket intact: skip mounting holes.
-      if (p.mountHoles !== 'none' && p.style !== 'weighted' && Math.min(cellW, cellD) / 2 - BASEPLATE_PROFILE[0][0] > SCREW_HOLE_RADIUS + BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS) {
-        cutters.push(cylinderAt(cx, cy, -1, L.bottom + 0.01, SCREW_HOLE_RADIUS));
-        if (p.mountHoles === 'counterbore') {
-          cutters.push(cylinderAt(cx, cy, L.bottom - BASEPLATE_SCREW_COUNTERBORE_HEIGHT, L.bottom, BASEPLATE_SCREW_COUNTERBORE_RADIUS));
-        } else {
-          const depth = BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS;
-          cutters.push(k().Manifold.cylinder(depth, SCREW_HOLE_RADIUS, SCREW_HOLE_RADIUS + depth, 32).translate([cx, cy, L.bottom - depth]));
-        }
-      }
-      if (p.style === 'weighted' && whole) {
-        const h = WEIGHT_POCKET_SIZE / 2;
-        cutters.push(box(cx - h, cx + h, cy - h, cy + h, -1, WEIGHT_POCKET_DEPTH));
-      }
     }
   }
-  return subtractAll(plate, cutters);
+  return subtractAll(plate, [...cutters, ...plateHardwareCutters(p, L)]);
+}
+
+export function plateHardwareCutters(p: PlateParams, L = plateLayout(p)): Manifold[] {
+  const cutters: Manifold[] = [];
+  for (let i = 0; i < L.x.cells.length; i++) for (let j = 0; j < L.y.cells.length; j++) {
+    const cx = L.x.centres[i], cy = L.y.centres[j];
+    const cellW = L.x.cells[i], cellD = L.y.cells[j];
+    const whole = cellW === GRID && cellD === GRID;
+    if (p.magnets && L.bottom > 0 && whole) {
+      for (const sx of [-1, 1]) {
+        for (const sy of [-1, 1]) {
+          cutters.push(
+            cylinderAt(cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, L.bottom - MAGNET_DEPTH, L.bottom + 0.01, MAGNET_DIAMETER / 2),
+          );
+        }
+      }
+    }
+    // Weighted cells keep their underside weight pocket intact: skip mounting holes.
+    if (p.mountHoles !== 'none' && p.style !== 'weighted' && Math.min(cellW, cellD) / 2 - BASEPLATE_PROFILE[0][0] > SCREW_HOLE_RADIUS + BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS) {
+      cutters.push(cylinderAt(cx, cy, -1, L.bottom + 0.01, SCREW_HOLE_RADIUS));
+      if (p.mountHoles === 'counterbore') {
+        cutters.push(cylinderAt(cx, cy, L.bottom - BASEPLATE_SCREW_COUNTERBORE_HEIGHT, L.bottom, BASEPLATE_SCREW_COUNTERBORE_RADIUS));
+      } else {
+        const depth = BASEPLATE_SCREW_COUNTERSINK_ADDITIONAL_RADIUS;
+        cutters.push(k().Manifold.cylinder(depth, SCREW_HOLE_RADIUS, SCREW_HOLE_RADIUS + depth, 32).translate([cx, cy, L.bottom - depth]));
+      }
+    }
+    if (p.style === 'weighted' && whole) {
+      const h = WEIGHT_POCKET_SIZE / 2;
+      cutters.push(box(cx - h, cx + h, cy - h, cy + h, -1, WEIGHT_POCKET_DEPTH));
+    }
+  }
+  return cutters;
 }
