@@ -12,7 +12,10 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 - Compartments in both directions, label tabs (full, left, center, right), finger scoops
 - Solid bins, magnet holes (6 × 2 mm), M3 screw holes, holes at outer corners only
 - Scoops on the front wall only, or on all four sides for trays
-- Optionally download a matching flat lid with the bin
+- Optionally download a matching lid: flat, or stackable (baseplate sockets on top so boxes stack), with an optional finger recess
+- Removable dividers: slotted inner walls plus printable divider plates; plates both ways cross with egg-crate notches at marked positions
+- Cullenect-compatible label sockets (V2 standard; print cards with gflabel)
+- Vase mode: a closed outer shape for spiral/vase printing, with slicer settings and a vase filament estimate
 - Label card slots: a channel at the back of each compartment holds a printed 12 × 1 mm card upright; the app adds a blank card for each width and checks that every card can drop in past the lip and clears the lid
 
 **Lids**
