@@ -1,3 +1,6 @@
+import notice from '../THIRD_PARTY_NOTICES.md?raw';
+import publicNotice from '../public/THIRD_PARTY_NOTICES.md?raw';
+import pageHtml from '../index.html?raw';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildBin, defaultBin } from '../src/geometry/bin';
 import { cullenectCavity, cullenectLayout, cullenectReferenceCard, cullenectSocket, LEGACY_GROOVE_CENTRES, placeCullenect } from '../src/geometry/cullenect';
@@ -57,10 +60,51 @@ describe('canonical Cullenect V2 sockets', () => {
     expect(r.info.some(s => s.includes('https://github.com/ndevenish/gflabel'))).toBe(true);
   });
   it('rejects narrow compartments and preserves sanitizer/link settings', () => {
-    expect(() => buildBin({ ...defaultBin, width: 1, compartmentsX: 2, labelSlot: 'cullenect' })).toThrow('too narrow');
+    expect(() => buildBin({ ...defaultBin, width: 1, compartmentsX: 3, labelSlot: 'cullenect' })).toThrow('too narrow');
     const s = sanitize({ bin: { labelSlot: 'cullenect', socketClearance: 0.18 } });
     expect(s.bin.labelSlot).toBe('cullenect');
     expect(decodeState(encodeState(s))).toEqual(s);
     expect(sanitize({ bin: { socketClearance: 2 } }).bin.socketClearance).toBe(0.4);
   });
+  it('retains a positive snap capture throughout the allowed pocket-play range', () => {
+    for (const play of [0.1, 0.18, 0.2, 0.3, 0.4]) for (const width of [15, 36, 78]) {
+      const socket = cullenectSocket(width, play), card = cullenectReferenceCard(width);
+      expect(Math.abs(card.intersect(socket).volume())).toBeLessThan(1e-6);
+      // The full back cap crosses the fixed retaining aperture during straight withdrawal.
+      expect(card.translate([0, 0, 0.3]).intersect(socket).volume()).toBeGreaterThan(0.01);
+    }
+  });
+
+  it('supports tab-mounted sockets with no growth beyond a 45-degree layer offset', () => {
+    for (const floor of [2.25, 6]) for (const socketClearance of [0.1, 0.18, 0.4]) {
+      const p = { ...defaultBin, width: 2, depth: 2, floor, socketClearance, height: 6, labelSlot: 'cullenect' as const, tab: 'full' as const };
+      const bin = buildBin(p), at = cullenectLayout(p)[0];
+      expect(bin.status()).toBe('NoError');
+      const step = 0.2;
+      let previous = bin.slice(4.75 + floor + 0.01);
+      for (let z = 4.75 + floor + 0.01 + step; z < at.z - 0.01; z += step) {
+        const current = bin.slice(z);
+        const overhang = current.subtract(previous.offset(step + 0.0001)).area();
+        expect(overhang).toBeLessThan(0.005);
+        previous = current;
+      }
+    }
+  });
+
+  it('accepts 0.5U cards in half-cell bins and subdivided compartments', () => {
+    for (const [width, compartmentsX] of [[0.5, 1], [1, 2]]) for (const tab of ['none', 'full'] as const) {
+      const p = { ...defaultBin, width, compartmentsX, labelSlot: 'cullenect' as const, tab };
+      const bin = buildBin(p), placements = cullenectLayout(p);
+      expect(bin.status()).toBe('NoError');
+      expect(bin.decompose()).toHaveLength(1);
+      expect(placements.every(at => at.width === 15)).toBe(true);
+      for (const at of placements) expect(Math.abs(placeCullenect(cullenectReferenceCard(15), at).intersect(bin).volume())).toBeLessThan(1e-6);
+    }
+  });
+
+  it('publishes the exact MIT notice through Vite public assets and links it in the footer', () => {
+    expect(publicNotice).toBe(notice);
+    expect(pageHtml).toContain('href="./THIRD_PARTY_NOTICES.md"');
+  });
+
 });
