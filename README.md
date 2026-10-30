@@ -69,6 +69,8 @@ Geometry is built with [manifold-3d](https://github.com/elalish/manifold) (WebAs
 
 ## Credits and licenses
 
+- Cullenect label system by [Cullen J Webb](https://github.com/CullenJWebb/Cullenect-Labels) (MIT); not affiliated. Socket geometry is independently modelled from the canonical V2 dimensions. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Generate cards with [gflabel](https://github.com/ndevenish/gflabel) using Cullenect V2.
+
 - Code in this repository: MIT, see [LICENSE](LICENSE).
 - [Gridfinity](https://gridfinity.xyz) was created by Zack Freedman and released under the MIT license. Dimensions follow [gridfinity-rebuilt-openscad](https://github.com/kennetek/gridfinity-rebuilt-openscad) (MIT); no code was copied from it.
 - **MultiBoard:** the tile generator is an independent, experimental design modelled from publicly reported measurements, compatible with [MultiBoard](https://www.multiboard.io). It is not affiliated with or endorsed by MultiBoard Ltd, and it contains no MultiBoard files or code. MultiBoard's own designs are covered by the [MultiBoard license](https://www.multiboard.io/license). Threads and snaps are not modelled yet; print a small test tile before printing a wall.

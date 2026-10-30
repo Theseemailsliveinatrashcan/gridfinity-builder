@@ -1,3 +1,4 @@
+import { addCullenectSockets } from './cullenect';
 import { addDividerRails } from './dividers';
 import type { Manifold, Vec2 } from 'manifold-3d';
 import {
@@ -58,7 +59,8 @@ export interface BinParams {
   compartmentsX: number;
   compartmentsY: number;
   tab: TabStyle;
-  labelSlot: 'none' | 'card';
+  labelSlot: 'none' | 'card' | 'cullenect';
+  socketClearance: number;
   cardPlay: number;
   /** Finger scoop size, 0 (off) to 1 (half the compartment depth). */
   scoop: number;
@@ -90,6 +92,7 @@ export const defaultBin: BinParams = {
   compartmentsY: 1,
   tab: 'none',
   labelSlot: 'none',
+  socketClearance: 0.18,
   cardPlay: 0.25,
   scoop: 0,
   scoopSides: 'front',
@@ -344,7 +347,7 @@ function interior(p: BinParams, L: BinLayout, slots: LabelCardSlot[]): Manifold 
       const front = extrudeAlongX(profile, -0.01, compW + 0.01);
       const left = extrudeAlongX(profile, -0.01, compD + 0.01).warp(v => { const x = v[0]; v[0] = v[1]; v[1] = compD - x; });
       const fillets = [front, left, left.mirror([1, 0, 0]).translate([compW, 0, 0])];
-      if (p.tab === 'none' && p.labelSlot !== 'card') fillets.push(front.mirror([0, 1, 0]).translate([0, compD, 0]));
+      if (p.tab === 'none' && p.labelSlot === 'none') fillets.push(front.mirror([0, 1, 0]).translate([0, compD, 0]));
       const cell = k().Manifold.union(fillets);
       for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
         parts.push(cell.translate([x0 + i * (compW + t), y0 + j * (compD + t), 0]));
@@ -427,7 +430,7 @@ export function buildBin(p: BinParams): Manifold {
   solid = subtractAll(solid, cutters);
 
   const inside = interior(p, L, slots);
-  const result = addDividerRails(inside ? solid.add(inside) : solid, p);
+  const result = addDividerRails(addCullenectSockets(inside ? solid.add(inside) : solid, p), p);
   for (const slot of slots) {
     if (Math.abs(labelCardSweep(slot, p.cardPlay, result).intersect(result).volume()) > 1e-7) throw new Error('Compartments too narrow for label cards');
   }

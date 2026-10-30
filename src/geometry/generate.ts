@@ -90,7 +90,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       part: buildBin(p),
       x: { cells: xs, padStart: gap, padEnd: gap, origin: -(p.width * GRID) / 2 },
       y: { cells: ys, padStart: gap, padEnd: gap, origin: -(p.depth * GRID) / 2 },
-      info: p.vase ? ['Print in spiral/vase mode: 1 wall, 0 top layers, ~6 bottom layers (bottom ≥ 1.2 mm)', `≈ ${vaseGrams(p).toFixed(1)} g in vase mode (PLA, 0.45 mm line width)`] : [],
+      info: p.vase ? ['Print in spiral/vase mode: 1 wall, 0 top layers, ~6 bottom layers (bottom ≥ 1.2 mm)', `≈ ${vaseGrams(p).toFixed(1)} g in vase mode (PLA, 0.45 mm line width)`] : p.labelSlot === 'cullenect' && !p.solid ? ['Cullenect V2 labels: gflabel — https://github.com/ndevenish/gflabel (use cullenect v2.0.0 or v2+)'] : [],
       base: `gridfinity-bin-${p.width}x${p.depth}x${p.heightMode === 'internal' ? `${p.internalDepth}mm` : p.height}`,
       warnings,
     };
