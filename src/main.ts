@@ -142,8 +142,8 @@ function input(f: Field): HTMLElement {
     for (const [v, text] of f.options ?? []) el.add(new Option(text, v, false, v === value));
     el.onchange = () => {
       groupOf(f)[f.key] = el.value;
-      onFieldChange(state, f);
-      changed(true);
+      const others = onFieldChange(state, f);
+      changed(!others);
     };
     wrap.append(title, el);
   } else {
@@ -323,9 +323,10 @@ function showResult(r: GenerateResult, ms: number): void {
   statusEl.append(filamentLine(r));
 
   warningsEl.innerHTML = '';
-  for (const w of r.warnings) {
+  for (const [text, cls] of [...r.info.map((t) => [t, 'info']), ...r.warnings.map((t) => [t, ''])]) {
     const li = document.createElement('li');
-    li.textContent = w;
+    li.textContent = text;
+    if (cls) li.className = cls;
     warningsEl.append(li);
   }
 

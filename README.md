@@ -17,6 +17,11 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 - Optional finger recess and underside magnet holes
 - Test-print the fit first
 
+**Holders**
+- A bin filled with a grid of pockets for one item: AA, AAA, 18650, 21700 and CR2032 batteries; 1/4" and 4 mm hex bits; SD and microSD cards; pens and markers; posts for 1/4" and 3/8" sockets; or custom round, hex, slot or post shapes
+- Straight or staggered rows, finger notches, leaning card slots; height fits the pockets automatically, and the app shows how many items fit
+- Preset sizes include typical clearance; test-print the fit first
+
 **Baseplates**
 - Size in units, or fit a drawer in mm with adjustable padding position
 - Thin (open frame), solid bottom, or weighted styles; magnet holes

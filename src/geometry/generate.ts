@@ -42,6 +42,8 @@ export interface MeshOut {
 export interface GenerateResult {
   pieces: MeshOut[];
   warnings: string[];
+  /** Neutral facts about the part, e.g. how many items a holder takes. */
+  info: string[];
   size: Vec3;
 }
 
@@ -64,7 +66,7 @@ function toMesh(name: string, m: Manifold, bed: PrintSettings): MeshOut {
   return { name, positions, indices: new Uint32Array(mesh.triVerts), min: bb.min, max: bb.max, fitsBed, volume: m.volume() };
 }
 
-function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec; connector?: Connector; base: string; warnings: string[] } {
+function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec; connector?: Connector; base: string; warnings: string[]; info?: string[] } {
   const warnings: string[] = [];
   if (req.kind === 'bin') {
     const p = req.bin;
@@ -86,13 +88,14 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     const p = req.holder;
     const layout = holderLayout(p);
     const gap = -BASE_TOP_SIZE_GAP / 2;
-    warnings.push(`Holds ${layout.count} items`);
+
     if (!layout.count) warnings.push('No items fit: reduce the item size, spacing or margin, or enlarge the holder.');
     return {
       part: buildHolder(p),
       x: { cells: cellPitches(p.width), padStart: gap, padEnd: gap, origin: -p.width * GRID / 2 },
       y: { cells: cellPitches(p.depth), padStart: gap, padEnd: gap, origin: -p.depth * GRID / 2 },
       base: `gridfinity-holder-${p.preset}-${p.width}x${p.depth}`, warnings,
+      info: layout.count ? [`Holds ${layout.count} item${layout.count === 1 ? '' : 's'}`] : [],
     };
   }
   if (req.kind === 'lid') {
@@ -184,7 +187,7 @@ function floorConnector(part: Manifold, x: AxisSpec, y: AxisSpec, floorZ: number
 }
 
 export function generate(req: GenerateRequest): GenerateResult {
-  const { part, x, y, connector: plateConnector, base, warnings } = build(req);
+  const { part, x, y, connector: plateConnector, base, warnings, info = [] } = build(req);
   let connector = plateConnector;
   let placed = false;
   let missing = false;
@@ -234,5 +237,5 @@ export function generate(req: GenerateRequest): GenerateResult {
   if (out.some((m) => !m.fitsBed)) {
     warnings.push(print.split ? 'Some pieces are still larger than the print bed.' : 'This part is larger than the print bed. Turn on "Split to fit bed".');
   }
-  return { pieces: out, warnings, size };
+  return { pieces: out, warnings, info, size };
 }

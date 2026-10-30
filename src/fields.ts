@@ -30,8 +30,13 @@ const plate = (f: Omit<Field, 'group'>): Field => ({ group: 'plate', ...f });
 const tile = (f: Omit<Field, 'group'>): Field => ({ group: 'tile', ...f });
 const print = (f: Omit<Field, 'group'>): Field => ({ group: 'print', ...f });
 
-export function onFieldChange(state: GenerateRequest, field: Field): void {
-  if (field.group === 'holder' && field.key === 'preset') Object.assign(state.holder, presetValues(state.holder.preset));
+/** Apply side effects of a field change. Returns true if other fields changed too, so the form must be redrawn. */
+export function onFieldChange(state: GenerateRequest, field: Field): boolean {
+  if (field.group === 'holder' && field.key === 'preset') {
+    Object.assign(state.holder, presetValues(state.holder.preset));
+    return true;
+  }
+  return false;
 }
 
 export const SECTIONS: Section[] = [

@@ -144,10 +144,29 @@ describe('holders', () => {
   it('generates named holder pieces, item count info and flat splitting', () => {
     const r = generate({ ...DEFAULTS, kind: 'holder', holder: params('aa') });
     expect(r.pieces[0].name).toBe('gridfinity-holder-aa-2x2');
-    expect(r.warnings).toContain('Holds 16 items');
+    expect(r.info).toContain('Holds 16 items');
+    expect(r.warnings.some((w) => w.startsWith('Holds'))).toBe(false);
     const split = generate({ ...DEFAULTS, kind: 'holder', holder: params('aa', { width: 6 }), print: { ...DEFAULTS.print, split: true, bedX: 126, bedY: 100 } });
     expect(split.pieces).toHaveLength(2);
     expect(split.pieces.every(p => p.fitsBed)).toBe(true);
     expect(split.warnings).toContain('Split holders join with flat faces: glue the pieces together.');
+  });
+});
+
+describe('preset changes redraw the form', () => {
+  it('reports that a preset change updated other fields', async () => {
+    const { onFieldChange, SECTIONS } = await import('../src/fields');
+    const { DEFAULTS } = await import('../src/state');
+    const fields = SECTIONS.flatMap((s) => s.fields);
+    const preset = fields.find((f) => f.group === 'holder' && f.key === 'preset')!;
+    const size = fields.find((f) => f.group === 'holder' && f.key === 'size')!;
+    const s = structuredClone(DEFAULTS);
+    s.holder.preset = 'aa';
+    expect(onFieldChange(s, preset)).toBe(true);
+    s.holder.size = 99; // manual edit
+    s.holder.preset = 'aaa'; // same shape as AA, so field visibility does not change
+    expect(onFieldChange(s, preset)).toBe(true);
+    expect(s.holder.size).toBeCloseTo(11.1, 5);
+    expect(onFieldChange(s, size)).toBe(false);
   });
 });
