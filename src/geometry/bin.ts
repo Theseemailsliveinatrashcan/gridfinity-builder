@@ -63,6 +63,7 @@ export interface BinParams {
   scoop: number;
   scoopSides: 'front' | 'all';
   solid: boolean;
+  vase: boolean;
   magnets: boolean;
   screws: boolean;
   cornerHolesOnly: boolean;
@@ -88,6 +89,7 @@ export const defaultBin: BinParams = {
   scoop: 0,
   scoopSides: 'front',
   solid: false,
+  vase: false,
   magnets: false,
   screws: false,
   cornerHolesOnly: false,
@@ -124,7 +126,14 @@ export interface BinLayout {
   wall: number;
 }
 
+export function vaseBinParams(p: BinParams): BinParams {
+  return p.vase ? { ...p, solid: true, heightMode: 'units', wall: defaultBin.wall, floor: defaultBin.floor,
+    compartmentsX: 1, compartmentsY: 1, tab: 'none', labelSlot: 'none', cardPlay: 0.25,
+    scoop: 0, scoopSides: 'front', magnets: false, screws: false, cornerHolesOnly: false, withLid: false } : p;
+}
+
 export function binLayout(p: BinParams): BinLayout {
+  p = vaseBinParams(p);
   const outerW = p.width * GRID - BASE_TOP_SIZE_GAP;
   const outerD = p.depth * GRID - BASE_TOP_SIZE_GAP;
   const wall = p.lip === 'normal' ? Math.min(p.wall, LIP_DEPTH) : p.wall;
@@ -139,7 +148,7 @@ export function validateBin(p: BinParams): string[] {
   const errors: string[] = [];
   const L = binLayout(p);
   if (p.width < 0.5 || p.depth < 0.5) errors.push('Width and depth must be at least 0.5 units.');
-  if (L.interiorTop - L.floorZ < 3 && !p.solid) errors.push('Bin is too short for this floor and lip; add height.');
+  if (L.interiorTop - L.floorZ < 3 && !p.solid && !p.vase) errors.push('Bin is too short for this floor and lip; add height.');
   if (L.cavW < 4 || L.cavD < 4) errors.push('Walls are too thick for this bin size.');
   return errors;
 }
@@ -186,6 +195,7 @@ function holeCentres(p: BinParams): Vec2[] {
  * stacking-lip socket that the next bin's foot sits in.
  */
 function cavityCut(p: BinParams, L: BinLayout): Manifold | undefined {
+  if (p.vase) return undefined;
   const { outerW: W, outerD: D, top, floorZ, wall } = L;
   const r = BASE_TOP_RADIUS;
   if (p.lip === 'none') {
@@ -221,7 +231,7 @@ export interface LabelCardSlot {
 }
 
 export function labelCardSlots(p: BinParams, L = binLayout(p)): LabelCardSlot[] {
-  if (p.labelSlot !== 'card' || p.solid) return [];
+  if (p.labelSlot !== 'card' || p.solid || p.vase) return [];
   if (!Number.isFinite(p.cardPlay) || p.cardPlay < 0.1 || p.cardPlay > 0.5) throw new Error('Card play must be 0.1–0.5 mm per side.');
   const nx = Math.max(1, Math.round(p.compartmentsX)), ny = Math.max(1, Math.round(p.compartmentsY));
   const w = (L.cavW - (nx - 1) * DIVIDER_THICKNESS) / nx;
@@ -379,6 +389,7 @@ function interior(p: BinParams, L: BinLayout, slots: LabelCardSlot[]): Manifold 
 }
 
 export function buildBin(p: BinParams): Manifold {
+  p = vaseBinParams(p);
   const L = binLayout(p);
   const slots = labelCardSlots(p, L);
   const xs = cellPitches(p.width);
@@ -412,4 +423,14 @@ export function buildBin(p: BinParams): Manifold {
     if (Math.abs(labelCardSweep(slot, p.cardPlay, result).intersect(result).volume()) > 1e-7) throw new Error('Compartments too narrow for label cards');
   }
   return result;
+}
+
+/** Approximate one 0.45 mm wall and a 1.2 mm bottom, using PLA at 1.24 g/cm³. */
+export function vaseGrams(p: BinParams): number {
+  const L = binLayout(p);
+  const r = Math.min(BASE_TOP_RADIUS, L.outerW / 2, L.outerD / 2);
+  const perimeter = 2 * (L.outerW + L.outerD - 4 * r) + 2 * Math.PI * r;
+  const area = L.outerW * L.outerD - (4 - Math.PI) * r * r;
+  const height = L.top + (p.lip === 'normal' ? LIP_HEIGHT - LIP_TIP_TRIM : 0);
+  return (perimeter * height * 0.45 + area * 1.2) * 1.24 / 1000;
 }

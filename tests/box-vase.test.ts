@@ -1,8 +1,9 @@
 import type { Manifold } from 'manifold-3d';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { binLayout, buildBin, buildLabelCard, defaultBin, labelCardSlots } from '../src/geometry/bin';
+import { binLayout, buildBin, buildLabelCard, defaultBin, labelCardSlots, vaseGrams } from '../src/geometry/bin';
 import { freeAll, initKernel, k } from '../src/geometry/kernel';
 import { generate, type MeshOut } from '../src/geometry/generate';
+import { SECTIONS } from '../src/fields';
 import { DEFAULTS, decodeState, encodeState, sanitize } from '../src/state';
 
 beforeAll(async () => { await initKernel(); });
@@ -50,5 +51,65 @@ describe('stackable lidded boxes', () => {
     expect(s.bin).toMatchObject({ lidStyle: 'stackable', lidGrip: true });
     expect(decodeState(encodeState(s))).toEqual(s);
     expect(sanitize({ bin: { lidStyle: 'bad', lidGrip: 'yes' } }).bin).toMatchObject({ lidStyle: 'flat', lidGrip: false });
+  });
+});
+
+
+describe('vase-mode bins', () => {
+  it('is one filled manifold with a single upper contour and no stacking socket', () => {
+    for (const [width, depth] of [[1, 1], [2, 1], [3, 2]]) {
+      const p = { ...defaultBin, width, depth, vase: true };
+      const m = buildBin(p), normal = buildBin({ ...p, vase: false, solid: true });
+      expect(m.status()).toBe('NoError');
+      expect(m.decompose()).toHaveLength(1);
+      expect(m.genus()).toBe(0);
+      expect(m.volume()).toBeGreaterThanOrEqual(normal.volume());
+      expect(m.volume()).toBeLessThan(normal.volume() * 1.1);
+      const top = binLayout(p).top;
+      expect(normal.slice(top + 1).numContour()).toBe(2);
+      expect(m.slice(top + 1).numContour()).toBe(1);
+      expect(m.slice(10).numContour()).toBe(1);
+    }
+  });
+
+  it('ignores hidden features and does not emit hidden label cards or matching lids', () => {
+    const plain = { ...defaultBin, vase: true };
+    const hidden = { ...plain, solid: false, magnets: true, screws: true, cornerHolesOnly: true,
+      compartmentsX: 6, compartmentsY: 5, tab: 'full' as const, scoop: 1, scoopSides: 'all' as const,
+      labelSlot: 'card' as const, cardPlay: 0.5, withLid: true, wall: 3, floor: 6,
+      heightMode: 'internal' as const, internalDepth: 100 };
+    const a = buildBin(plain), b = buildBin(hidden);
+    expect(b.boundingBox()).toEqual(a.boundingBox());
+    expect(b.volume()).toBeCloseTo(a.volume(), 5);
+    const r = generate({ ...DEFAULTS, bin: hidden });
+    expect(r.pieces).toHaveLength(1);
+    expect(r.pieces[0].volume).toBeCloseTo(a.volume(), 5);
+    const state = { ...DEFAULTS, bin: hidden };
+    for (const key of ['magnets', 'screws', 'cornerHolesOnly', 'compartmentsX', 'compartmentsY', 'tab', 'scoop', 'scoopSides', 'labelSlot', 'cardPlay', 'withLid', 'wall', 'floor', 'solid', 'internalDepth', 'heightMode']) {
+      const field = SECTIONS.flatMap(s => s.fields).find(f => f.group === 'bin' && f.key === key)!;
+      expect(field.show!(state)).toBe(false);
+    }
+  });
+
+  it('reports spiral settings, explicit topology limits and the lightweight PLA estimate', () => {
+    const p = { ...defaultBin, vase: true };
+    const r = generate({ ...DEFAULTS, bin: p });
+    expect(r.info).toContain('Print in spiral/vase mode: 1 wall, 0 top layers, ~6 bottom layers (bottom ≥ 1.2 mm)');
+    expect(r.info).toContain(`≈ ${vaseGrams(p).toFixed(1)} g in vase mode (PLA, 0.45 mm line width)`);
+    const L = binLayout(p), radius = 3.75;
+    const perimeter = 2 * (L.outerW + L.outerD - 4 * radius) + 2 * Math.PI * radius;
+    const area = L.outerW * L.outerD - (4 - Math.PI) * radius ** 2;
+    expect(vaseGrams(p)).toBeCloseTo((perimeter * (L.top + 3.8) * 0.45 + area * 1.2) * 1.24 / 1000, 6);
+    expect(vaseGrams(p)).toBeLessThan(r.pieces[0].volume * 1.24 / 1000);
+    expect(r.warnings).toContain("Vase-mode bins can't stack on each other");
+    expect(r.warnings).toContain('Multiple feet need solid bottom layers through 4.75 mm before the spiral wall begins.');
+  });
+
+  it('sanitizes and shares vase settings without changing their saved hidden values', () => {
+    const s = sanitize({ bin: { vase: true, compartmentsX: 4, magnets: true } });
+    expect(s.bin.vase).toBe(true);
+    expect(s.bin.compartmentsX).toBe(4);
+    expect(decodeState(encodeState(s))).toEqual(s);
+    expect(sanitize({ bin: { vase: 'yes' } }).bin.vase).toBe(false);
   });
 });
