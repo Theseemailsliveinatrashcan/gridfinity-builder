@@ -4,7 +4,7 @@ import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from '.
 import { buildPlate, plateLayout, plateHardwareCutters, type PlateParams } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
-import { buildLid, type LidParams } from './lid';
+import { buildLid, defaultLid, type LidParams } from './lid';
 import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
 import { DOVETAIL_DEPTH, planSplit, splitPart, tabSolid, type AxisSpec, type Connector, type Piece } from './split';
@@ -207,7 +207,7 @@ function floorConnector(part: Manifold, x: AxisSpec, y: AxisSpec, floorZ: number
   };
 }
 
-export function generate(req: GenerateRequest): GenerateResult {
+function generatePart(req: GenerateRequest): GenerateResult {
   const { part, x, y, connector: plateConnector, base, warnings, info = [] } = build(req);
   let connector = plateConnector;
   let placed = false;
@@ -269,4 +269,21 @@ export function generate(req: GenerateRequest): GenerateResult {
     warnings.push(print.split ? 'Some pieces are still larger than the print bed.' : 'This part is larger than the print bed. Turn on "Split to fit bed".');
   }
   return { pieces: out, warnings, info, size };
+}
+
+export function generate(req: GenerateRequest): GenerateResult {
+  const result = generatePart(req);
+  if (req.kind !== 'bin' || !req.bin.withLid) return result;
+  if (req.bin.lip !== 'normal') {
+    result.warnings.push('Lids need the stacking lip');
+    return result;
+  }
+  const lid = generatePart({ ...req, kind: 'lid', lid: {
+    ...defaultLid, width: req.bin.width, depth: req.bin.depth, magnets: req.bin.magnets,
+  } });
+  const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
+  const lidBase = `gridfinity-lid-${req.bin.width}x${req.bin.depth}`;
+  result.pieces.push(...lid.pieces.map(piece => ({ ...piece, name: piece.name.replace(lidBase, `${base}-lid`) })));
+  result.warnings = [...new Set([...result.warnings, ...lid.warnings])];
+  return result;
 }

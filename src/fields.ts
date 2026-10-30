@@ -62,6 +62,7 @@ export const SECTIONS: Section[] = [
     kinds: ['bin'],
     fields: [
       bin({ key: 'lip', label: 'Stacking lip', kind: 'select', options: [['normal', 'Standard'], ['none', 'None (flat top)']] }),
+      bin({ key: 'withLid', label: 'Include matching lid', kind: 'toggle', help: 'Adds a flat lid with the same footprint and magnet setting. Requires the stacking lip.' }),
       bin({ key: 'wall', label: 'Wall thickness', kind: 'number', min: 0.8, max: 3, step: 0.05, unit: 'mm' }),
       bin({ key: 'floor', label: 'Floor thickness', kind: 'number', min: 0.6, max: 6, step: 0.05, unit: 'mm', help: 'Above the 4.75 mm foot. 2.25 matches the standard 7 mm base.' }),
       bin({ key: 'solid', label: 'Solid bin (no cavity)', kind: 'toggle' }),

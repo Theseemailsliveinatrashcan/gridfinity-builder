@@ -50,6 +50,7 @@ export interface BinParams {
   /** Floor thickness above the top of the foot profile (4.75 mm). */
   floor: number;
   lip: LipStyle;
+  withLid: boolean;
   compartmentsX: number;
   compartmentsY: number;
   tab: TabStyle;
@@ -70,6 +71,7 @@ export const defaultBin: BinParams = {
   wall: 0.95,
   floor: 2.25,
   lip: 'normal',
+  withLid: false,
   compartmentsX: 1,
   compartmentsY: 1,
   tab: 'none',
