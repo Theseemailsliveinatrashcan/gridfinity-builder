@@ -56,6 +56,7 @@ export interface BinParams {
   tab: TabStyle;
   /** Finger scoop size, 0 (off) to 1 (half the compartment depth). */
   scoop: number;
+  scoopSides: 'front' | 'all';
   solid: boolean;
   magnets: boolean;
   screws: boolean;
@@ -76,6 +77,7 @@ export const defaultBin: BinParams = {
   compartmentsY: 1,
   tab: 'none',
   scoop: 0,
+  scoopSides: 'front',
   solid: false,
   magnets: false,
   screws: false,
@@ -201,6 +203,16 @@ function cavityCut(p: BinParams, L: BinLayout): Manifold | undefined {
   ]);
 }
 
+function scoopProfile(edge: number, floor: number, radius: number): Vec2[] {
+  const profile: Vec2[] = [[edge - 0.01, floor - 0.01], [edge - 0.01, floor + radius]];
+  for (let step = 0; step <= 16; step++) {
+    const angle = Math.PI + step / 16 * Math.PI / 2;
+    profile.push(step === 0 ? [edge, floor + radius] : step === 16 ? [edge + radius, floor] : [edge + radius + radius * Math.cos(angle), floor + radius + radius * Math.sin(angle)]);
+  }
+  profile.push([edge + radius, floor - 0.01]);
+  return profile;
+}
+
 function interior(p: BinParams, L: BinLayout): Manifold | undefined {
   if (p.solid) return undefined;
   const { cavW, cavD, floorZ, interiorTop } = L;
@@ -223,23 +235,26 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
   }
 
   const height = interiorTop - floorZ;
-  if (p.scoop > 0) {
+  if (p.scoop > 0 && p.scoopSides === 'all') {
+    const radius = Math.min(p.scoop * Math.min(compW, compD) / 2, height - 1);
+    if (radius > 1e-6) {
+      const profile = scoopProfile(0, floorZ, radius);
+      // Overlap adjoining walls rather than leaving numerically coincident end faces.
+      const front = extrudeAlongX(profile, -0.01, compW + 0.01);
+      const left = extrudeAlongX(profile, -0.01, compD + 0.01).warp(v => { const x = v[0]; v[0] = v[1]; v[1] = compD - x; });
+      const fillets = [front, left, left.mirror([1, 0, 0]).translate([compW, 0, 0])];
+      if (p.tab === 'none') fillets.push(front.mirror([0, 1, 0]).translate([0, compD, 0]));
+      const cell = k().Manifold.union(fillets);
+      for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+        parts.push(cell.translate([x0 + i * (compW + t), y0 + j * (compD + t), 0]));
+      }
+    }
+  } else if (p.scoop > 0) {
     const radius = Math.min(p.scoop * (compD / 2), height - 1);
     if (radius > 0.5) {
       for (let j = 0; j < ny; j++) {
         const yf = y0 + j * (compD + t); // front edge of this compartment row
-        // Fillet between the front wall and the floor: corner, then a concave
-        // quarter circle from (yf, floor + r) to (yf + r, floor).
-        const profile: Vec2[] = [
-          [yf - 0.01, floorZ - 0.01],
-          [yf - 0.01, floorZ + radius],
-        ];
-        const steps = 16;
-        for (let s = 0; s <= steps; s++) {
-          const a = Math.PI + (s / steps) * (Math.PI / 2);
-          profile.push([yf + radius + radius * Math.cos(a), floorZ + radius + radius * Math.sin(a)]);
-        }
-        profile.push([yf + radius, floorZ - 0.01]);
+        const profile = scoopProfile(yf, floorZ, radius);
         parts.push(extrudeAlongX(profile, x0, -x0));
       }
     }

@@ -78,7 +78,8 @@ export const SECTIONS: Section[] = [
         key: 'tab', label: 'Label tab', kind: 'select', show: (s) => !s.bin.solid,
         options: [['none', 'None'], ['full', 'Full width'], ['left', 'Left'], ['center', 'Center'], ['right', 'Right']],
       }),
-      bin({ key: 'scoop', label: 'Finger scoop', kind: 'range', min: 0, max: 1, step: 0.05, show: (s) => !s.bin.solid, help: 'Curved front edge for scooping out small parts.' }),
+      bin({ key: 'scoopSides', label: 'Scoop sides', kind: 'select', options: [['front', 'Front only'], ['all', 'All sides (tray)']], show: s => !s.bin.solid && s.bin.scoop > 0, help: 'Label tabs take priority over the back fillet.' }),
+      bin({ key: 'scoop', label: 'Finger scoop', kind: 'range', min: 0, max: 1, step: 0.05, show: (s) => !s.bin.solid, help: 'Curved floor edges for scooping out small parts.' }),
     ],
   },
   {

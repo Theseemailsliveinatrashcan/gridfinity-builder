@@ -1,7 +1,7 @@
 import type { Manifold } from 'manifold-3d';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { binLayout, buildBin, defaultBin } from '../src/geometry/bin';
-import { freeAll, initKernel, k } from '../src/geometry/kernel';
+import { box, freeAll, initKernel, k } from '../src/geometry/kernel';
 import { generate, type MeshOut } from '../src/geometry/generate';
 import { DEFAULTS, sanitize } from '../src/state';
 
@@ -45,5 +45,56 @@ describe('matching bin lids', () => {
     expect(r.warnings).toContain('Lids need the stacking lip');
     expect(sanitize({ bin: { withLid: true } }).bin.withLid).toBe(true);
     expect(sanitize({ bin: { withLid: 'yes' } }).bin.withLid).toBe(false);
+  });
+});
+
+
+describe('all-side bin scoops', () => {
+  for (const [width, depth, compartmentsX, compartmentsY] of [[1, 1, 1, 1], [3, 2, 3, 2]]) {
+    for (const tab of ['none', 'full'] as const) it(`${width}×${depth} with ${compartmentsX}×${compartmentsY} compartments and ${tab} tab stays manifold`, () => {
+      const p = { ...defaultBin, width, depth, compartmentsX, compartmentsY, scoop: 1, tab, scoopSides: 'all' as const };
+      const m = buildBin(p);
+      expect(m.status()).toBe('NoError');
+      expect(m.genus()).toBe(0);
+      expect(m.volume()).toBeGreaterThan(buildBin({ ...p, scoopSides: 'front' }).volume());
+    });
+  }
+
+  it('fills the floor junction just inside every inner wall and corner', () => {
+    const p = { ...defaultBin, width: 2, depth: 2, scoop: 1, scoopSides: 'all' as const };
+    const L = binLayout(p), m = buildBin(p);
+    const x = L.cavW / 2 - 0.2, y = L.cavD / 2 - 0.2;
+    for (const [cx, cy] of [[-x, 0], [x, 0], [0, -y], [0, y]]) {
+      const sample = box(cx - 0.05, cx + 0.05, cy - 0.05, cy + 0.05, L.floorZ + 0.25, L.floorZ + 0.35);
+      expect(m.intersect(sample).volume()).toBeCloseTo(sample.volume(), 6);
+    }
+    // Stay inside the rounded cavity outline when probing corners.
+    for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
+      const sample = box(sx * (x - 1) - 0.05, sx * (x - 1) + 0.05, sy * (y - 1) - 0.05, sy * (y - 1) + 0.05, L.floorZ + 0.25, L.floorZ + 0.35);
+      expect(m.intersect(sample).volume()).toBeCloseTo(sample.volume(), 6);
+    }
+  });
+
+  it('skips the back fillet when label tabs are on', () => {
+    const p = { ...defaultBin, width: 2, depth: 2, scoop: 0.5, scoopSides: 'all' as const };
+    const L = binLayout(p), y = L.cavD / 2 - 0.2;
+    const sample = box(-0.05, 0.05, y - 0.05, y + 0.05, L.floorZ + 0.25, L.floorZ + 0.35);
+    expect(buildBin(p).intersect(sample).volume()).toBeCloseTo(sample.volume(), 6);
+    expect(buildBin({ ...p, tab: 'full' }).intersect(sample).volume()).toBeLessThan(1e-6);
+  });
+
+  it('applies the fillet within every compartment and sanitizes the selector', () => {
+    const p = { ...defaultBin, width: 3, depth: 2, compartmentsX: 3, compartmentsY: 2, scoop: 1, scoopSides: 'all' as const };
+    const L = binLayout(p), m = buildBin(p), t = 1.2;
+    const w = (L.cavW - 2 * t) / 3, d = (L.cavD - t) / 2;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
+      const x = -L.cavW / 2 + i * (w + t), y = -L.cavD / 2 + j * (d + t);
+      for (const [cx, cy] of [[x + 0.2, y + d / 2], [x + w - 0.2, y + d / 2], [x + w / 2, y + 0.2], [x + w / 2, y + d - 0.2]]) {
+        const sample = box(cx - 0.05, cx + 0.05, cy - 0.05, cy + 0.05, L.floorZ + 0.25, L.floorZ + 0.35);
+        expect(m.intersect(sample).volume()).toBeCloseTo(sample.volume(), 6);
+      }
+    }
+    expect(sanitize({ bin: { scoopSides: 'all' } }).bin.scoopSides).toBe('all');
+    expect(sanitize({ bin: { scoopSides: 'invalid' } }).bin.scoopSides).toBe('front');
   });
 });
