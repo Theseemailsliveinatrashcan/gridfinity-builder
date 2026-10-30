@@ -27,6 +27,7 @@ import {
   k,
   prism,
   roundedLoft,
+  loft,
   roundedRect,
   subtractAll,
   unionAll,
@@ -54,6 +55,8 @@ export interface BinParams {
   compartmentsX: number;
   compartmentsY: number;
   tab: TabStyle;
+  labelSlot: 'none' | 'card';
+  cardPlay: number;
   /** Finger scoop size, 0 (off) to 1 (half the compartment depth). */
   scoop: number;
   scoopSides: 'front' | 'all';
@@ -76,6 +79,8 @@ export const defaultBin: BinParams = {
   compartmentsX: 1,
   compartmentsY: 1,
   tab: 'none',
+  labelSlot: 'none',
+  cardPlay: 0.25,
   scoop: 0,
   scoopSides: 'front',
   solid: false,
@@ -203,6 +208,55 @@ function cavityCut(p: BinParams, L: BinLayout): Manifold | undefined {
   ]);
 }
 
+export interface LabelCardSlot {
+  width: number;
+  cx: number;
+  backY: number;
+  bottomZ: number;
+  backWall: number;
+}
+
+export function labelCardSlots(p: BinParams, L = binLayout(p)): LabelCardSlot[] {
+  if (p.labelSlot !== 'card' || p.solid) return [];
+  if (!Number.isFinite(p.cardPlay) || p.cardPlay < 0.1 || p.cardPlay > 0.5) throw new Error('Card play must be 0.1–0.5 mm per side.');
+  const nx = Math.max(1, Math.round(p.compartmentsX)), ny = Math.max(1, Math.round(p.compartmentsY));
+  const w = (L.cavW - (nx - 1) * DIVIDER_THICKNESS) / nx;
+  const d = (L.cavD - (ny - 1) * DIVIDER_THICKNESS) / ny;
+  const width = Math.max(20, Math.min(80, w - 4));
+  const backInset = (p.lip === 'normal' ? LIP_DEPTH - L.wall : 0) + 1.5;
+  if (w < width + 2 * p.cardPlay + 1.6 + 0.2 || d < backInset + 1 + p.cardPlay + 2.6) throw new Error('Compartment too small for a label card slot; reduce compartments or enlarge the bin.');
+  if (L.interiorTop - L.floorZ < 4) throw new Error('Label card slots need at least 4 mm of inside height.');
+  const slots: LabelCardSlot[] = [];
+  for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
+    const backWall = -L.cavD / 2 + j * (d + DIVIDER_THICKNESS) + d;
+    slots.push({ width: +width.toFixed(4), cx: -L.cavW / 2 + i * (w + DIVIDER_THICKNESS) + w / 2,
+      backY: backWall - backInset, bottomZ: L.floorZ + 0.8, backWall });
+  }
+  return slots;
+}
+
+export function labelCardChannel(slot: LabelCardSlot, play: number, top: number): Manifold {
+  return box(slot.cx - slot.width / 2 - play, slot.cx + slot.width / 2 + play,
+    slot.backY - 1 - play, slot.backY + play, slot.bottomZ, top);
+}
+
+/** Blank card prints flat; rotate +90° about X and translate to its slot to insert. */
+export function buildLabelCard(width: number): Manifold {
+  const rectangle = (inset: number): Vec2[] => [[-width / 2 + inset, -0.5 + inset], [width / 2 - inset, -0.5 + inset],
+    [width / 2 - inset, 0.5 - inset], [-width / 2 + inset, 0.5 - inset]];
+  return loft([{ z: 0, outline: rectangle(0) }, { z: 11.6, outline: rectangle(0) }, { z: 12, outline: rectangle(0.4) }])
+    .warp(v => { const y = v[1]; v[1] = v[2]; v[2] = 0.5 - y; });
+}
+
+function labelCardRail(slot: LabelCardSlot, play: number, floor: number): Manifold {
+  const x0 = slot.cx - slot.width / 2 - play - 0.8, x1 = slot.cx + slot.width / 2 + play + 0.8;
+  const front = slot.backY - 1 - play - 0.8;
+  const frame = box(x0, x1, front, slot.backY + play + 0.8, floor - 0.01, floor + 4);
+  const base = box(x0, x1, front, slot.backWall + 0.01, floor - 0.01, slot.bottomZ);
+  const fillet = extrudeAlongX(scoopProfile(0, floor, 0.8), x0, x1).mirror([0, 1, 0]).translate([0, front, 0]);
+  return k().Manifold.union([frame, base, fillet]);
+}
+
 function scoopProfile(edge: number, floor: number, radius: number): Vec2[] {
   const profile: Vec2[] = [[edge - 0.01, floor - 0.01], [edge - 0.01, floor + radius]];
   for (let step = 0; step <= 16; step++) {
@@ -243,7 +297,7 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
       const front = extrudeAlongX(profile, -0.01, compW + 0.01);
       const left = extrudeAlongX(profile, -0.01, compD + 0.01).warp(v => { const x = v[0]; v[0] = v[1]; v[1] = compD - x; });
       const fillets = [front, left, left.mirror([1, 0, 0]).translate([compW, 0, 0])];
-      if (p.tab === 'none') fillets.push(front.mirror([0, 1, 0]).translate([0, compD, 0]));
+      if (p.tab === 'none' && p.labelSlot !== 'card') fillets.push(front.mirror([0, 1, 0]).translate([0, compD, 0]));
       const cell = k().Manifold.union(fillets);
       for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) {
         parts.push(cell.translate([x0 + i * (compW + t), y0 + j * (compD + t), 0]));
@@ -260,7 +314,7 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
     }
   }
 
-  if (p.tab !== 'none') {
+  if (p.tab !== 'none' && p.labelSlot !== 'card') {
     const depth = Math.min(TAB_DEPTH, compD * 0.5);
     const rise = Math.tan((TAB_ANGLE_DEG * Math.PI) / 180) * depth + TAB_TIP;
     if (rise < height - 1) {
@@ -286,11 +340,15 @@ function interior(p: BinParams, L: BinLayout): Manifold | undefined {
     }
   }
 
+  const slots = labelCardSlots(p, L);
+  for (const slot of slots) parts.push(labelCardRail(slot, p.cardPlay, floorZ));
   const all = unionAll(parts);
   if (!all) return undefined;
   // Keep features inside the cavity so they never poke through rounded corners.
   const clip = prism(roundedRect(cavW + 0.02, cavD + 0.02, Math.max(BASE_TOP_RADIUS - L.wall, 0.25)), floorZ - 0.02, interiorTop + 0.01);
-  return all.intersect(clip);
+  const features = all.intersect(clip);
+  // Keep the insertion path clear of adjacent scoops as well as the channel rails.
+  return subtractAll(features, slots.map(slot => labelCardChannel(slot, p.cardPlay, Math.max(interiorTop + 1, slot.bottomZ + 13))));
 }
 
 export function buildBin(p: BinParams): Manifold {

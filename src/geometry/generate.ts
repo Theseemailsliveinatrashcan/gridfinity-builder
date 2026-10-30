@@ -1,6 +1,6 @@
 import { unionAll } from './kernel';
 import type { Manifold, Vec3 } from 'manifold-3d';
-import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from './bin';
+import { binLayout, buildBin, buildLabelCard, labelCardSlots, cellPitches, validateBin, type BinParams } from './bin';
 import { buildPlate, plateLayout, plateHardwareCutters, type PlateParams } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
@@ -74,6 +74,8 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
   if (req.kind === 'bin') {
     const p = req.bin;
     const errors = validateBin(p);
+    if (p.labelSlot === 'card' && p.tab !== 'none') warnings.push('Label tab replaced by the label card slot');
+    if (p.labelSlot === 'card' && p.solid) warnings.push('Label card slots need a hollow bin');
     if (errors.length) throw new Error(errors.join(' '));
     const xs = cellPitches(p.width);
     const ys = cellPitches(p.depth);
@@ -279,7 +281,15 @@ function shiftX(p: MeshOut, dx: number): MeshOut {
 
 export function generate(req: GenerateRequest): GenerateResult {
   const result = generatePart(req);
-  if (req.kind !== 'bin' || !req.bin.withLid) return result;
+  if (req.kind !== 'bin') return result;
+  const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
+  const widths = new Set(labelCardSlots(req.bin).map(slot => slot.width));
+  for (const width of widths) {
+    const card = toMesh(`${base}-label-card-${width}mm`, buildLabelCard(width), req.print);
+    result.pieces.push(card);
+    if (!card.fitsBed) result.warnings.push('Label card is larger than the print bed.');
+  }
+  if (!req.bin.withLid) return result;
   if (req.bin.lip !== 'normal') {
     result.warnings.push('Lids need the stacking lip');
     return result;
@@ -287,7 +297,6 @@ export function generate(req: GenerateRequest): GenerateResult {
   const lid = generatePart({ ...req, kind: 'lid', lid: {
     ...defaultLid, width: req.bin.width, depth: req.bin.depth, magnets: req.bin.magnets,
   } });
-  const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
   const lidBase = `gridfinity-lid-${req.bin.width}x${req.bin.depth}`;
   // Park the lid beside the bin so previews don't draw it through the bin floor.
   // Exports re-centre every piece, so this only affects the preview.
