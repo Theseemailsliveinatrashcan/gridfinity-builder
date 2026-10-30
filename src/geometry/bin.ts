@@ -94,7 +94,7 @@ export const defaultBin: BinParams = {
   compartmentsY: 1,
   tab: 'none',
   labelSlot: 'none',
-  socketClearance: 0.18,
+  socketClearance: 0.15,
   cardPlay: 0.25,
   scoop: 0,
   scoopSides: 'front',

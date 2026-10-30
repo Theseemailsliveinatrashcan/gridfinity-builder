@@ -1,5 +1,5 @@
 import type { Manifold } from 'manifold-3d';
-import { binLayout, type BinParams } from './bin';
+import { binLayout, buildBin, type BinParams } from './bin';
 import { DIVIDER_THICKNESS, TAB_DEPTH, TAB_ANGLE_DEG, TAB_TIP } from './constants';
 import { box, extrudeAlongX, extrudeAlongY, prism, roundedLoft, roundedRect, subtractAll } from './kernel';
 
@@ -13,12 +13,15 @@ export function cullenectCavity(width: number, play: number): Manifold {
 export function cullenectSocket(width: number, play: number): Manifold {
   const outside = roundedRect(width + 2 * play + 1.6, 11 + 2 * play + 1.6, 1.3 + play);
   const opening = roundedRect(width + 2 * play, 11 + 2 * play, 0.5 + play);
-  // The V2 edge recess is 0.2 mm deep per side: retain 0.15 mm, leaving 0.05 fit clearance.
-  const leadBottom = -1 - play;
+  // Upstream: 0.3 mm total mouth offset and 0.2 mm ribs => 0.05 mm capture.
+  // The aperture remains fixed while play changes only the cavity behind it.
+  const leadBottom = -0.95 - play - 0.05;
   const aperture = roundedLoft(width + 2 * play, 11 + 2 * play, 0.5 + play, [
-    { z: leadBottom - 0.01, inset: 0 }, { z: leadBottom, inset: 0 }, { z: -0.85, inset: play + 0.15 }, { z: -0.44, inset: play + 0.15 },
+    { z: leadBottom - 0.01, inset: 0 }, { z: leadBottom, inset: 0 },
+    { z: -0.95, inset: play + 0.05 }, { z: -0.55, inset: play + 0.05 },
+    { z: -0.35, inset: play - 0.15 }, { z: -0.34, inset: play - 0.15 },
   ]);
-  const lip = prism(opening.offset(0.01), leadBottom, -0.45).subtract(aperture);
+  const lip = prism(opening.offset(0.01), leadBottom, -0.35).subtract(aperture);
   return prism(outside, -3.01, 0).subtract(cullenectCavity(width, play)).add(lip);
 }
 
@@ -72,10 +75,14 @@ export function cullenectTabSupport(p: BinParams, at: CullenectPlacement): Manif
 }
 
 export function addCullenectSockets(part: Manifold, p: BinParams): Manifold {
-  for (const at of cullenectLayout(p)) {
-    if (!at.wall) part = part.add(cullenectTabSupport(p, at));
+  const placements = cullenectLayout(p);
+  if (!placements.length) return part;
+  const envelope = buildBin({ ...p, solid: true, labelSlot: 'none', removableDividers: 'none',
+    magnets: false, screws: false, tab: 'none', scoop: 0, withLid: false });
+  for (const at of placements) {
+    if (!at.wall) part = part.add(cullenectTabSupport(p, at).intersect(envelope));
     part = part.subtract(placeCullenect(cullenectCavity(at.width, p.socketClearance), at))
-      .add(placeCullenect(cullenectSocket(at.width, p.socketClearance), at));
+      .add(placeCullenect(cullenectSocket(at.width, p.socketClearance), at).intersect(envelope));
   }
   return part;
 }

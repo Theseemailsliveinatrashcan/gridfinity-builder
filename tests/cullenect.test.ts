@@ -4,7 +4,7 @@ import pageHtml from '../index.html?raw';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildBin, defaultBin } from '../src/geometry/bin';
 import { cullenectCavity, cullenectLayout, cullenectReferenceCard, cullenectSocket, LEGACY_GROOVE_CENTRES, placeCullenect } from '../src/geometry/cullenect';
-import { box, freeAll, initKernel } from '../src/geometry/kernel';
+import { box, freeAll, initKernel, k, roundedRect } from '../src/geometry/kernel';
 import { generate } from '../src/geometry/generate';
 import { DEFAULTS, decodeState, encodeState, sanitize } from '../src/state';
 
@@ -22,7 +22,7 @@ describe('canonical Cullenect V2 sockets', () => {
       expect(gap.max[axis] - b.max[axis]).toBeCloseTo(0.18, 5);
     }
     // The socket lip is 0.4 mm deep and engages the label's recessed perimeter.
-    const lip = box(17.985, 18.1, -1, 1, -0.89, -0.51);
+    const lip = box(17.96, 18.1, -1, 1, -0.89, -0.57);
     expect(socket.intersect(lip).volume()).toBeCloseTo(lip.volume(), 6);
     expect(card.intersect(lip).volume()).toBeLessThan(1e-6);
   });
@@ -105,6 +105,45 @@ describe('canonical Cullenect V2 sockets', () => {
   it('publishes the exact MIT notice through Vite public assets and links it in the footer', () => {
     expect(publicNotice).toBe(notice);
     expect(pageHtml).toContain('href="./THIRD_PARTY_NOTICES.md"');
+  });
+
+  it('has a sloped entry rather than a horizontal shoulder in the card insertion path', () => {
+    const width = 36, footprint = roundedRect(width, 11, 0.5);
+    const land = roundedRect(width - 0.1, 10.9, 0.45);
+    const retainedArea = footprint.area() - land.area(), step = 0.05;
+    for (const play of [0.1, 0.15, 0.18, 0.2, 0.3, 0.4]) {
+      const socket = cullenectSocket(width, play), card = cullenectReferenceCard(width);
+      const retained = socket.slice(-0.75).intersect(k().CrossSection.square([width, 0.1]).translate([0, -0.05])).bounds().min[0];
+      expect(width / 2 - retained).toBeCloseTo(0.05, 5);
+      expect(retained - card.slice(-0.75).bounds().max[0]).toBeCloseTo(0.15, 5);
+      const contact: number[] = [];
+      for (let offset = 1.2; offset >= -1e-8; offset -= step) contact.push(Math.abs(card.translate([0, 0, Math.max(0, offset)]).intersect(socket).volume()));
+      const first = contact.find(volume => volume > 1e-6)!;
+      expect(first).toBeGreaterThan(0);
+      // A lead-in builds interference gradually; a square shoulder jumps to full capture.
+      expect(first).toBeLessThan(retainedArea * step * 0.8);
+      const mesh = socket.getMesh();
+      const vertex = (index: number) => [...mesh.vertProperties.subarray(index * mesh.numProp, index * mesh.numProp + 3)];
+      for (let i = 0; i < mesh.triVerts.length; i += 3) {
+        const [a, b, c] = [vertex(mesh.triVerts[i]), vertex(mesh.triVerts[i + 1]), vertex(mesh.triVerts[i + 2])];
+        if (a[2] < -1.05 || a[2] > 0.001 || Math.abs(a[2] - b[2]) > 1e-7 || Math.abs(a[2] - c[2]) > 1e-7) continue;
+        const normalZ = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+        if (normalZ <= 1e-9) continue;
+        const triangle = k().CrossSection.ofPolygons([[[a[0], a[1]], [b[0], b[1]], [c[0], c[1]]]]);
+        expect(triangle.intersect(footprint).area()).toBeLessThan(1e-7);
+      }
+    }
+  });
+
+  it('keeps all socket supports within the solid-bin outer envelope', () => {
+    for (const [width, depth, compartmentsX] of [[0.5, 1, 1], [2, 2, 1], [1, 1, 2]]) {
+      const p = { ...defaultBin, width, depth, compartmentsX, tab: 'full' as const, labelSlot: 'cullenect' as const };
+      const bin = buildBin(p);
+      const envelope = buildBin({ ...p, labelSlot: 'none', solid: true, tab: 'none', scoop: 0 });
+      expect(bin.status()).toBe('NoError');
+      expect(Math.abs(bin.subtract(envelope).volume())).toBeLessThan(1e-6);
+    }
+    expect(defaultBin.socketClearance).toBe(0.15);
   });
 
 });
