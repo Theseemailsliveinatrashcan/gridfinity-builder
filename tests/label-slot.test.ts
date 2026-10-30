@@ -92,3 +92,18 @@ describe('label card slots', () => {
     expect(sanitize({ bin: { cardPlay: -1 } }).bin.cardPlay).toBe(0.1);
   });
 });
+
+describe('label card preview placement', () => {
+  it('cards are previewed in front of the bin, not inside it', async () => {
+    const { generate } = await import('../src/geometry/generate');
+    const { DEFAULTS } = await import('../src/state');
+    const { initKernel, freeAll } = await import('../src/geometry/kernel');
+    await initKernel();
+    const r = generate({ ...DEFAULTS, bin: { ...DEFAULTS.bin, width: 3, depth: 1, compartmentsX: 3, labelSlot: 'card', withLid: true } });
+    const bin = r.pieces[0];
+    const cards = r.pieces.filter((p) => p.name.includes('-label-card-'));
+    expect(cards.length).toBeGreaterThan(0);
+    for (const c of cards) expect(c.max[1]).toBeLessThan(bin.min[1]);
+    freeAll();
+  });
+});

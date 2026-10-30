@@ -273,10 +273,14 @@ function generatePart(req: GenerateRequest): GenerateResult {
   return { pieces: out, warnings, info, size };
 }
 
-function shiftX(p: MeshOut, dx: number): MeshOut {
+/** Move a piece for the preview only; exports re-centre every piece. */
+function shift(p: MeshOut, dx: number, dy = 0): MeshOut {
   const positions = p.positions.slice();
-  for (let i = 0; i < positions.length; i += 3) positions[i] += dx;
-  return { ...p, positions, min: [p.min[0] + dx, p.min[1], p.min[2]], max: [p.max[0] + dx, p.max[1], p.max[2]] };
+  for (let i = 0; i < positions.length; i += 3) {
+    positions[i] += dx;
+    positions[i + 1] += dy;
+  }
+  return { ...p, positions, min: [p.min[0] + dx, p.min[1] + dy, p.min[2]], max: [p.max[0] + dx, p.max[1] + dy, p.max[2]] };
 }
 
 export function generate(req: GenerateRequest): GenerateResult {
@@ -284,8 +288,12 @@ export function generate(req: GenerateRequest): GenerateResult {
   if (req.kind !== 'bin') return result;
   const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
   const widths = new Set(labelCardSlots(req.bin).map(slot => slot.width));
+  // Lay cards out in a row in front of the bin (preview only).
+  let cardY = Math.min(...result.pieces.map((p) => p.min[1])) - 10;
   for (const width of widths) {
-    const card = toMesh(`${base}-label-card-${width}mm`, buildLabelCard(width), req.print);
+    let card = toMesh(`${base}-label-card-${width}mm`, buildLabelCard(width), req.print);
+    card = shift(card, 0, cardY - card.max[1]);
+    cardY = card.min[1] - 5;
     result.pieces.push(card);
     if (!card.fitsBed) result.warnings.push('Label card is larger than the print bed.');
   }
@@ -300,8 +308,8 @@ export function generate(req: GenerateRequest): GenerateResult {
   const lidBase = `gridfinity-lid-${req.bin.width}x${req.bin.depth}`;
   // Park the lid beside the bin so previews don't draw it through the bin floor.
   // Exports re-centre every piece, so this only affects the preview.
-  const shift = Math.max(...result.pieces.map((p) => p.max[0])) - Math.min(...lid.pieces.map((p) => p.min[0])) + 15;
-  result.pieces.push(...lid.pieces.map((piece) => ({ ...shiftX(piece, shift), name: piece.name.replace(lidBase, `${base}-lid`) })));
+  const dx = Math.max(...result.pieces.map((p) => p.max[0])) - Math.min(...lid.pieces.map((p) => p.min[0])) + 15;
+  result.pieces.push(...lid.pieces.map((piece) => ({ ...shift(piece, dx), name: piece.name.replace(lidBase, `${base}-lid`) })));
   result.warnings = [...new Set([...result.warnings, ...lid.warnings])];
   return result;
 }
