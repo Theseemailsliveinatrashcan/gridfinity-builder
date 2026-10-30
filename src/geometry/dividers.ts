@@ -56,11 +56,13 @@ export function addDividerRails(part: Manifold, p: BinParams): Manifold {
         slots.push(orient(extrudeAlongX([[y0, d.L.interiorTop + 0.01], [y0 + 0.4, d.L.interiorTop - 0.5], [y0 + 0.8, d.L.interiorTop + 0.01]], start, start + 0.51)));
       }
     }
-    // Clear the drop-in route through any crossing fixed dividers or scoops.
-    if (clearInterior) channels.push(outline(k().CrossSection.square([width - 0.02, p.slotWidth]).translate([-width / 2 + 0.01, at - p.slotWidth / 2])));
+    // Every plate's drop-in route: kept clear of perpendicular ribs, and of fixed dividers or scoops.
+    channels.push(outline(k().CrossSection.square([width - 0.02, p.slotWidth]).translate([-width / 2 + 0.01, at - p.slotWidth / 2])));
   }
-  const guides = prism(k().CrossSection.union(ribs), d.L.floorZ - 0.01, d.L.interiorTop);
-  if (channels.length) slots.push(prism(k().CrossSection.union(channels), d.L.floorZ, d.L.interiorTop + 0.01));
+  const routes = k().CrossSection.union(channels);
+  const guides = prism(k().CrossSection.union(ribs).subtract(routes), d.L.floorZ - 0.01, d.L.interiorTop);
+  // Cutting the bin itself is only needed when interior features could block a route.
+  if (clearInterior) slots.push(prism(routes, d.L.floorZ, d.L.interiorTop + 0.01));
   return subtractAll(part.add(guides), slots);
 }
 

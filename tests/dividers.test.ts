@@ -143,3 +143,23 @@ describe('removable dividers', () => {
   }, 10000);
 
 });
+
+describe('review regression: end slots with deep perpendicular ribs', () => {
+  it('end-slot plates clear the bin on both axes with no interior features', async () => {
+    const { initKernel, freeAll } = await import('../src/geometry/kernel');
+    const { buildBin, defaultBin } = await import('../src/geometry/bin');
+    const { buildDivider, dividerLayout } = await import('../src/geometry/dividers');
+    await initKernel();
+    const p = { ...defaultBin, width: 1.5, depth: 1.5, lip: 'none' as const, wall: 3, dividerThickness: 3, slotWidth: 3.1, slotPitch: 5, removableDividers: 'both' as const, dividerCountX: 10, dividerCountY: 10 };
+    const bin = buildBin(p);
+    const d = dividerLayout(p);
+    const z = d.L.floorZ;
+    for (const [axis, list] of [['x', d.installX], ['y', d.installY]] as const) {
+      for (const at of [list[0], list[list.length - 1]]) {
+        const plate = buildDivider(p, axis, at).translate([0, 0, z]);
+        expect(plate.intersect(bin).volume()).toBeLessThan(1e-6);
+      }
+    }
+    freeAll();
+  });
+});
