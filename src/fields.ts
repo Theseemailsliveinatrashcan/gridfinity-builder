@@ -1,6 +1,7 @@
+import { presetValues } from './geometry/holder';
 import type { GenerateRequest, PartKind } from './geometry/generate';
 
-export type Group = 'bin' | 'plate' | 'tile' | 'lid' | 'print';
+export type Group = 'bin' | 'plate' | 'tile' | 'lid' | 'holder' | 'print';
 
 export interface Field {
   group: Group;
@@ -24,9 +25,14 @@ export interface Section {
 
 const bin = (f: Omit<Field, 'group'>): Field => ({ group: 'bin', ...f });
 const lid = (f: Omit<Field, 'group'>): Field => ({ group: 'lid', ...f });
+const holder = (f: Omit<Field, 'group'>): Field => ({ group: 'holder', ...f });
 const plate = (f: Omit<Field, 'group'>): Field => ({ group: 'plate', ...f });
 const tile = (f: Omit<Field, 'group'>): Field => ({ group: 'tile', ...f });
 const print = (f: Omit<Field, 'group'>): Field => ({ group: 'print', ...f });
+
+export function onFieldChange(state: GenerateRequest, field: Field): void {
+  if (field.group === 'holder' && field.key === 'preset') Object.assign(state.holder, presetValues(state.holder.preset));
+}
 
 export const SECTIONS: Section[] = [
   {
@@ -84,6 +90,37 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Holder — Size & base',
+    kinds: ['holder'],
+    fields: [
+      holder({ key: 'width', label: 'Width', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units' }),
+      holder({ key: 'depth', label: 'Depth', kind: 'number', min: 0.5, max: 12, step: 0.5, unit: 'units' }),
+      holder({ key: 'heightMode', label: 'Height', kind: 'select', options: [['auto', 'Auto (fit item depth)'], ['units', 'Manual units']] }),
+      holder({ key: 'height', label: 'Manual height', kind: 'number', min: 1, max: 24, step: 1, unit: '× 7 mm', show: s => s.holder.heightMode === 'units' }),
+      holder({ key: 'lip', label: 'Stacking lip', kind: 'select', options: [['normal', 'Standard'], ['none', 'None']] }),
+      holder({ key: 'magnets', label: 'Magnet holes', kind: 'toggle' }),
+      holder({ key: 'screws', label: 'Screw holes (M3)', kind: 'toggle' }),
+    ],
+  },
+  {
+    title: 'Holder — Pockets',
+    kinds: ['holder'],
+    fields: [
+      holder({ key: 'preset', label: 'Item preset', kind: 'select', options: [['aa', 'AA battery'], ['aaa', 'AAA battery'], ['18650', '18650 cell'], ['21700', '21700 cell'], ['cr2032', 'CR2032 coin cell'], ['hex14', '¼″ hex bit'], ['hex4', '4 mm hex bit'], ['sd', 'SD card'], ['microsd', 'microSD card'], ['pen', 'Pen'], ['marker', 'Marker'], ['socket14', '¼″ socket drive'], ['socket38', '⅜″ socket drive'], ['custom', 'Custom (keep values)']], help: 'Presets include typical clearance. Check the dimensions of your items and test-print the fit first.' }),
+      holder({ key: 'shape', label: 'Shape', kind: 'select', options: [['round', 'Round pocket'], ['hex', 'Hex pocket'], ['slot', 'Card slot'], ['post', 'Square post']] }),
+      holder({ key: 'size', label: 'Item size', kind: 'number', min: 2, max: 100, step: 0.1, unit: 'mm', help: 'Diameter, hex across flats, slot length, or square post side.' }),
+      holder({ key: 'slotThickness', label: 'Slot thickness', kind: 'number', min: 0.5, max: 30, step: 0.1, unit: 'mm', show: s => s.holder.shape === 'slot' }),
+      holder({ key: 'pocketDepth', label: 'Pocket depth / post height', kind: 'number', min: 0.5, max: 100, step: 0.1, unit: 'mm' }),
+      holder({ key: 'clearance', label: 'Item clearance per side', kind: 'number', min: 0, max: 2, step: 0.05, unit: 'mm', help: 'Added to pockets; subtracted from posts. Presets set this to 0.' }),
+      holder({ key: 'spacing', label: 'Spacing', kind: 'number', min: 0.5, max: 60, step: 0.1, unit: 'mm', help: 'Gap between pockets; for posts, centre pitch minus the specified post size.' }),
+      holder({ key: 'margin', label: 'Inner wall margin', kind: 'number', min: 0, max: 30, step: 0.5, unit: 'mm' }),
+      holder({ key: 'layout', label: 'Layout', kind: 'select', options: [['grid', 'Grid'], ['staggered', 'Staggered (round / hex)']] }),
+      holder({ key: 'hexPointForward', label: 'Hex point forward', kind: 'toggle', show: s => s.holder.shape === 'hex' }),
+      holder({ key: 'slotLean', label: 'Lean toward back', kind: 'number', min: 0, max: 15, step: 1, unit: '°', show: s => s.holder.shape === 'slot' }),
+      holder({ key: 'fingerNotch', label: 'Finger notch', kind: 'toggle', show: s => s.holder.shape === 'round' }),
+    ],
+  },
+  {
     title: 'Baseplate',
     kinds: ['plate'],
     fields: [
@@ -109,18 +146,18 @@ export const SECTIONS: Section[] = [
   },
   {
     title: 'Print bed',
-    kinds: ['bin', 'plate', 'tile', 'lid'],
+    kinds: ['bin', 'plate', 'tile', 'lid', 'holder'],
     fields: [
       print({ key: 'bedX', label: 'Bed width', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
       print({ key: 'bedY', label: 'Bed depth', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
       print({ key: 'split', label: 'Split to fit bed', kind: 'toggle', help: 'Cuts along grid lines into the fewest, most even pieces.' }),
       print({
-        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind !== 'tile',
+        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind !== 'tile' && s.kind !== 'holder',
         options: [['dovetail', 'Dovetails'], ['none', 'Flat (no connector)']],
       }),
       print({
         key: 'clearance', label: 'Dovetail fit gap', kind: 'number', min: 0, max: 0.6, step: 0.05, unit: 'mm',
-        show: (s) => s.print.split && s.kind !== 'tile' && s.print.connector === 'dovetail',
+        show: (s) => s.print.split && s.kind !== 'tile' && s.kind !== 'holder' && s.print.connector === 'dovetail',
         help: 'Per side. Raise it if the joints are too tight.',
       }),
     ],

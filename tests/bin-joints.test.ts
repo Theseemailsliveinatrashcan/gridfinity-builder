@@ -111,7 +111,7 @@ describe('bin and lid dovetails', () => {
   });
 
   it('checks every clearance-expanded insertion column on X and Y offset tabs', () => {
-    const clearance = SECTIONS.flatMap(s => s.fields).find(f => f.key === 'clearance')!.max!;
+    const clearance = SECTIONS.flatMap(s => s.fields).find(f => f.group === 'print' && f.key === 'clearance')!.max!;
     for (const axis of ['x', 'y'] as const) {
       const isX = axis === 'x';
       const req = request({ bin: { ...DEFAULTS.bin, width: isX ? 6 : 2, depth: isX ? 2 : 6, height: 6,

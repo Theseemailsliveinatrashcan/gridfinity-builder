@@ -2,7 +2,7 @@ import './style.css';
 import { estimateFilament, MATERIALS, type Material } from './export/filament';
 import { toBinaryStl } from './export/stl';
 import { to3mf } from './export/threemf';
-import { BED_PRESETS, SECTIONS, type Field } from './fields';
+import { BED_PRESETS, SECTIONS, onFieldChange, type Field } from './fields';
 import type { GenerateResult, MeshOut, PartKind } from './geometry/generate';
 import { zipSync } from 'fflate';
 import { DEFAULTS, decodeState, encodeState } from './state';
@@ -142,6 +142,7 @@ function input(f: Field): HTMLElement {
     for (const [v, text] of f.options ?? []) el.add(new Option(text, v, false, v === value));
     el.onchange = () => {
       groupOf(f)[f.key] = el.value;
+      onFieldChange(state, f);
       changed(true);
     };
     wrap.append(title, el);

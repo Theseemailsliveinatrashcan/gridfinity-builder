@@ -1,12 +1,13 @@
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from './bin';
 import { buildPlate, plateLayout, type PlateParams } from './baseplate';
+import { buildHolder, holderLayout, type HolderParams } from './holder';
 import { buildLid, type LidParams } from './lid';
 import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
 import { DOVETAIL_DEPTH, planSplit, splitPart, tabSolid, type AxisSpec, type Connector, type Piece } from './split';
 
-export type PartKind = 'bin' | 'plate' | 'tile' | 'lid';
+export type PartKind = 'bin' | 'plate' | 'tile' | 'lid' | 'holder';
 export type ConnectorKind = 'dovetail' | 'none';
 
 export interface PrintSettings {
@@ -21,6 +22,7 @@ export interface GenerateRequest {
   kind: PartKind;
   bin: BinParams;
   lid: LidParams;
+  holder: HolderParams;
   plate: PlateParams;
   tile: TileParams;
   print: PrintSettings;
@@ -78,6 +80,19 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       y: { cells: ys, padStart: gap, padEnd: gap, origin: -(p.depth * GRID) / 2 },
       base: `gridfinity-bin-${p.width}x${p.depth}x${p.heightMode === 'internal' ? `${p.internalDepth}mm` : p.height}`,
       warnings,
+    };
+  }
+  if (req.kind === 'holder') {
+    const p = req.holder;
+    const layout = holderLayout(p);
+    const gap = -BASE_TOP_SIZE_GAP / 2;
+    warnings.push(`Holds ${layout.count} items`);
+    if (!layout.count) warnings.push('No items fit: reduce the item size, spacing or margin, or enlarge the holder.');
+    return {
+      part: buildHolder(p),
+      x: { cells: cellPitches(p.width), padStart: gap, padEnd: gap, origin: -p.width * GRID / 2 },
+      y: { cells: cellPitches(p.depth), padStart: gap, padEnd: gap, origin: -p.depth * GRID / 2 },
+      base: `gridfinity-holder-${p.preset}-${p.width}x${p.depth}`, warnings,
     };
   }
   if (req.kind === 'lid') {
@@ -206,6 +221,7 @@ export function generate(req: GenerateRequest): GenerateResult {
         split = splitPart(part, plan);
       }
       pieces = split.map((pc) => ({ ...pc, name: `${base}-${pc.name}` }));
+      if (req.kind === 'holder') warnings.push('Split holders join with flat faces: glue the pieces together.');
       if (req.kind === 'bin' || req.kind === 'lid') {
         if (missing) warnings.push('No room for a dovetail on one or more cuts: glue those seams');
         if (placed) warnings.push('Dovetails align the floor; glue the wall seams for strength.');

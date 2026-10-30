@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { defaultHolder } from '../src/geometry/holder';
 import { buildLid, defaultLid } from '../src/geometry/lid';
 import { buildBin, defaultBin, type BinParams } from '../src/geometry/bin';
 import { buildPlate, defaultPlate, type PlateParams } from '../src/geometry/baseplate';
@@ -99,6 +100,7 @@ describe('splitting', () => {
   const req = (over: Partial<GenerateRequest>): GenerateRequest => ({
     kind: 'plate',
     bin: defaultBin,
+    holder: defaultHolder,
     lid: defaultLid,
     plate: defaultPlate,
     tile: defaultTile,
