@@ -1,13 +1,14 @@
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, buildBin, cellPitches, validateBin, type BinParams } from './bin';
 import { buildPlate, plateLayout, type PlateParams } from './baseplate';
+import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
 import { buildLid, type LidParams } from './lid';
 import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
 import { DOVETAIL_DEPTH, planSplit, splitPart, tabSolid, type AxisSpec, type Connector, type Piece } from './split';
 
-export type PartKind = 'bin' | 'plate' | 'tile' | 'lid' | 'holder';
+export type PartKind = 'bin' | 'plate' | 'tile' | 'lid' | 'holder' | 'spacer';
 export type ConnectorKind = 'dovetail' | 'none';
 
 export interface PrintSettings {
@@ -23,6 +24,7 @@ export interface GenerateRequest {
   bin: BinParams;
   lid: LidParams;
   holder: HolderParams;
+  spacer: SpacerParams;
   plate: PlateParams;
   tile: TileParams;
   print: PrintSettings;
@@ -82,6 +84,17 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       y: { cells: ys, padStart: gap, padEnd: gap, origin: -(p.depth * GRID) / 2 },
       base: `gridfinity-bin-${p.width}x${p.depth}x${p.heightMode === 'internal' ? `${p.internalDepth}mm` : p.height}`,
       warnings,
+    };
+  }
+  if (req.kind === 'spacer') {
+    const p = req.spacer;
+    const part = buildSpacer(p);
+    const depth = p.shape === 'corner' ? p.length2 : p.width + (p.lip ? 3 : 0);
+    return {
+      part,
+      x: { cells: spacerCells(p.length), padStart: 0, padEnd: 0, origin: 0 },
+      y: { cells: p.shape === 'corner' ? spacerCells(depth) : [depth], padStart: 0, padEnd: 0, origin: 0 },
+      base: `gridfinity-spacer-${p.length}x${p.width}`, warnings,
     };
   }
   if (req.kind === 'holder') {

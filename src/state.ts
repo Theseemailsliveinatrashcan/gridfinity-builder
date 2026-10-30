@@ -1,18 +1,20 @@
 import { SECTIONS, type Field } from './fields';
 import { defaultPlate } from './geometry/baseplate';
 import { defaultBin } from './geometry/bin';
+import { defaultSpacer } from './geometry/spacer';
 import { defaultHolder } from './geometry/holder';
 import { defaultLid } from './geometry/lid';
 import type { GenerateRequest, PartKind } from './geometry/generate';
 import { defaultTile } from './geometry/multiboard';
 
-export const KINDS: PartKind[] = ['bin', 'lid', 'holder', 'plate', 'tile'];
+export const KINDS: PartKind[] = ['bin', 'lid', 'holder', 'plate', 'spacer', 'tile'];
 
 export const DEFAULTS: GenerateRequest = {
   kind: 'bin',
   bin: defaultBin,
   lid: defaultLid,
   holder: defaultHolder,
+  spacer: defaultSpacer,
   plate: defaultPlate,
   tile: defaultTile,
   print: { split: false, bedX: 220, bedY: 220, connector: 'dovetail', clearance: 0.2 },

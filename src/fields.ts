@@ -1,7 +1,8 @@
+import { SPACER_HEIGHTS } from './geometry/spacer';
 import { presetValues } from './geometry/holder';
 import type { GenerateRequest, PartKind } from './geometry/generate';
 
-export type Group = 'bin' | 'plate' | 'tile' | 'lid' | 'holder' | 'print';
+export type Group = 'bin' | 'plate' | 'tile' | 'lid' | 'holder' | 'spacer' | 'print';
 
 export interface Field {
   group: Group;
@@ -26,12 +27,17 @@ export interface Section {
 const bin = (f: Omit<Field, 'group'>): Field => ({ group: 'bin', ...f });
 const lid = (f: Omit<Field, 'group'>): Field => ({ group: 'lid', ...f });
 const holder = (f: Omit<Field, 'group'>): Field => ({ group: 'holder', ...f });
+const spacer = (f: Omit<Field, 'group'>): Field => ({ group: 'spacer', ...f });
 const plate = (f: Omit<Field, 'group'>): Field => ({ group: 'plate', ...f });
 const tile = (f: Omit<Field, 'group'>): Field => ({ group: 'tile', ...f });
 const print = (f: Omit<Field, 'group'>): Field => ({ group: 'print', ...f });
 
 /** Apply side effects of a field change. Returns true if other fields changed too, so the form must be redrawn. */
 export function onFieldChange(state: GenerateRequest, field: Field): boolean {
+  if (field.group === 'spacer' && field.key === 'preset' && state.spacer.preset !== 'custom') {
+    state.spacer.height = SPACER_HEIGHTS[state.spacer.preset];
+    return true;
+  }
   if (field.group === 'holder' && field.key === 'preset') {
     Object.assign(state.holder, presetValues(state.holder.preset));
     return true;
@@ -142,6 +148,19 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Spacer',
+    kinds: ['spacer'],
+    fields: [
+      spacer({ key: 'shape', label: 'Shape', kind: 'select', options: [['straight', 'Straight strip'], ['corner', 'Corner (L-shaped)']] }),
+      spacer({ key: 'length', label: 'Length', kind: 'number', min: 20, max: 1000, step: 1, unit: 'mm' }),
+      spacer({ key: 'length2', label: 'Second arm length', kind: 'number', min: 20, max: 1000, step: 1, unit: 'mm', show: s => s.spacer.shape === 'corner' }),
+      spacer({ key: 'width', label: 'Gap width', kind: 'number', min: 2, max: 100, step: 0.1, unit: 'mm' }),
+      spacer({ key: 'preset', label: 'Match baseplate height', kind: 'select', options: [['thin', 'Thin (5 mm)'], ['solid', 'Solid (8.2 mm)'], ['weighted', 'Weighted (11.4 mm)'], ['custom', 'Custom']] }),
+      spacer({ key: 'height', label: 'Height', kind: 'number', min: 1.2, max: 30, step: 0.1, unit: 'mm', show: s => s.spacer.preset === 'custom' }),
+      spacer({ key: 'lip', label: 'Bottom retaining ledge', kind: 'toggle', help: 'Adds 3 mm toward the baseplate at the bottom, 1.2 mm thick; the plate rests on it. Include this when measuring fit.' }),
+    ],
+  },
+  {
     title: 'MultiBoard-compatible tile (experimental)',
     kinds: ['tile'],
     fields: [
@@ -152,18 +171,18 @@ export const SECTIONS: Section[] = [
   },
   {
     title: 'Print bed',
-    kinds: ['bin', 'plate', 'tile', 'lid', 'holder'],
+    kinds: ['bin', 'plate', 'tile', 'lid', 'holder', 'spacer'],
     fields: [
       print({ key: 'bedX', label: 'Bed width', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
       print({ key: 'bedY', label: 'Bed depth', kind: 'number', min: 40, max: 1000, step: 1, unit: 'mm' }),
       print({ key: 'split', label: 'Split to fit bed', kind: 'toggle', help: 'Cuts along grid lines into the fewest, most even pieces.' }),
       print({
-        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind !== 'tile' && s.kind !== 'holder',
+        key: 'connector', label: 'Joints', kind: 'select', show: (s) => s.print.split && s.kind !== 'tile' && s.kind !== 'holder' && s.kind !== 'spacer',
         options: [['dovetail', 'Dovetails'], ['none', 'Flat (no connector)']],
       }),
       print({
         key: 'clearance', label: 'Dovetail fit gap', kind: 'number', min: 0, max: 0.6, step: 0.05, unit: 'mm',
-        show: (s) => s.print.split && s.kind !== 'tile' && s.kind !== 'holder' && s.print.connector === 'dovetail',
+        show: (s) => s.print.split && s.kind !== 'tile' && s.kind !== 'holder' && s.kind !== 'spacer' && s.print.connector === 'dovetail',
         help: 'Per side. Raise it if the joints are too tight.',
       }),
     ],

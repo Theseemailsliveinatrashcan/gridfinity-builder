@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { defaultSpacer } from '../src/geometry/spacer';
 import { defaultHolder } from '../src/geometry/holder';
 import { buildLid, defaultLid } from '../src/geometry/lid';
 import { buildBin, defaultBin, type BinParams } from '../src/geometry/bin';
@@ -101,6 +102,7 @@ describe('splitting', () => {
     kind: 'plate',
     bin: defaultBin,
     holder: defaultHolder,
+    spacer: defaultSpacer,
     lid: defaultLid,
     plate: defaultPlate,
     tile: defaultTile,
