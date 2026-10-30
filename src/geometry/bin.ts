@@ -68,6 +68,8 @@ export interface BinParams {
   solid: boolean;
   vase: boolean;
   removableDividers: 'none' | 'x' | 'y' | 'both';
+  dividerCountX: number;
+  dividerCountY: number;
   slotPitch: number;
   slotWidth: number;
   dividerThickness: number;
@@ -99,6 +101,8 @@ export const defaultBin: BinParams = {
   solid: false,
   vase: false,
   removableDividers: 'none',
+  dividerCountX: 1,
+  dividerCountY: 1,
   slotPitch: 5,
   slotWidth: 2.5,
   dividerThickness: 2.2,
@@ -403,6 +407,7 @@ function interior(p: BinParams, L: BinLayout, slots: LabelCardSlot[]): Manifold 
 export function buildBin(p: BinParams): Manifold {
   p = vaseBinParams(p);
   const L = binLayout(p);
+  if (!p.solid && p.removableDividers !== 'none' && p.labelSlot !== 'none') throw new Error("Removable dividers can't be combined with label cards or sockets yet.");
   const slots = labelCardSlots(p, L);
   const xs = cellPitches(p.width);
   const ys = cellPitches(p.depth);

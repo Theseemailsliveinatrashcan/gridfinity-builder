@@ -77,4 +77,69 @@ describe('removable dividers', () => {
     expect(decodeState(encodeState(s))).toEqual(s);
     expect(sanitize({ bin: { removableDividers: 'bad', slotPitch: 100 } }).bin).toMatchObject({ removableDividers: 'none', slotPitch: 20 });
   });
+  for (const [dividerCountX, dividerCountY] of [[2, 3], [3, 2], [3, 3]]) {
+    it(`interlocks all marked off-centre plates for counts ${dividerCountX}/${dividerCountY}`, () => {
+      const p = { ...defaultBin, width: 2, depth: 2, removableDividers: 'both' as const, dividerCountX, dividerCountY };
+      const d = dividerLayout(p), bin = buildBin(p);
+      expect(d.installX).toHaveLength(dividerCountX); expect(d.installY).toHaveLength(dividerCountY);
+      for (const atX of d.installX) for (const atY of d.installY) {
+        const x = buildDivider(p, 'x', atX), y = buildDivider(p, 'y', atY);
+        expect(Math.abs(x.intersect(y).volume())).toBeLessThan(1e-6);
+        expect(Math.abs(x.intersect(bin).volume())).toBeLessThan(1e-6);
+        expect(Math.abs(y.intersect(bin).volume())).toBeLessThan(1e-6);
+      }
+      const r = generate({ ...DEFAULTS, bin: p });
+      expect(r.info).toContain(`With dividers both ways, install plates at the marked positions: X at ${d.installX.join(', ')}, Y at ${d.installY.join(', ')} mm`);
+      expect(r.info).toContain(`Print ${dividerCountX} removable X divider plates`);
+      expect(r.pieces.filter(p => p.name.includes('-divider-'))).toHaveLength(2);
+      const probe = (at: number) => box(d.L.cavW / 2 - d.ribDepth + 0.2, d.L.cavW / 2 - d.ribDepth + 0.3,
+        at + p.slotWidth / 2 + 0.35, at + p.slotWidth / 2 + 0.45, d.L.interiorTop - 0.3, d.L.interiorTop - 0.2);
+      expect(bin.intersect(probe(d.installX[0])).volume()).toBeLessThan(1e-6);
+      const unmarked = d.x.find(at => !d.installX.includes(at))!;
+      const solid = probe(unmarked);
+      expect(bin.intersect(solid).volume()).toBeCloseTo(solid.volume(), 6);
+    });
+  }
+
+  it('rejects label cards and sockets with removable dividers', () => {
+    for (const labelSlot of ['card', 'cullenect'] as const) {
+      const p = { ...defaultBin, width: 2, depth: 2, removableDividers: 'both' as const, labelSlot };
+      expect(() => buildBin(p)).toThrow("Removable dividers can't be combined with label cards or sockets yet.");
+      expect(() => generate({ ...DEFAULTS, bin: p })).toThrow("Removable dividers can't be combined with label cards or sockets yet.");
+    }
+  });
+
+  it('captures each plate end by at least 1.5 mm throughout ±0.3 mm axial play', () => {
+    for (const wall of [0.8, 0.95, 3]) for (const direction of ['x', 'y'] as const) {
+      const p = { ...defaultBin, width: 2, depth: 2, removableDividers: direction, wall };
+      const d = dividerLayout(p), bin = buildBin(p), coordinate = direction === 'x' ? 0 : 1;
+      const half = (direction === 'x' ? d.L.cavW : d.L.cavD) / 2;
+      for (const travel of [-0.3, 0.3]) {
+        const plate = buildDivider(p, direction).translate(direction === 'x' ? [travel, 0, 0] : [0, travel, 0]);
+        const b = plate.boundingBox();
+        expect((-half + d.ribDepth) - b.min[coordinate]).toBeGreaterThanOrEqual(1.5 - 1e-6);
+        expect(b.max[coordinate] - (half - d.ribDepth)).toBeGreaterThanOrEqual(1.5 - 1e-6);
+        expect(Math.abs(plate.intersect(bin).volume())).toBeLessThan(1e-6);
+      }
+    }
+  });
+
+  it('uses distinct symmetric guide slots even for dense counts in small bins', () => {
+    const p = { ...defaultBin, width: 1, depth: 1, removableDividers: 'both' as const, dividerCountX: 4, dividerCountY: 4 };
+    const d = dividerLayout(p);
+    expect(new Set(d.installX).size).toBe(4);
+    expect(d.installX).toEqual(d.installX.slice().reverse().map(at => -at));
+    expect(d.installX.every(at => d.x.includes(at))).toBe(true);
+  });
+
+  it('sanitizes divider counts and generates 6×6 both-ways geometry under 5 seconds', () => {
+    expect(sanitize({ bin: { dividerCountX: 99, dividerCountY: -2 } }).bin).toMatchObject({ dividerCountX: 10, dividerCountY: 1 });
+    const started = performance.now();
+    const r = generate({ ...DEFAULTS, bin: { ...defaultBin, width: 6, depth: 6, removableDividers: 'both', dividerCountX: 3, dividerCountY: 3 } });
+    const elapsed = performance.now() - started;
+    expect(r.pieces).toHaveLength(3);
+    expect(elapsed).toBeLessThan(5000);
+    console.info(`6×6 both-way divider generation: ${Math.round(elapsed)} ms`);
+  }, 10000);
+
 });

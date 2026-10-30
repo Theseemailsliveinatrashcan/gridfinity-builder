@@ -311,8 +311,10 @@ export function generate(req: GenerateRequest): GenerateResult {
     if (!card.fitsBed) result.warnings.push('Label card is larger than the print bed.');
   }
   const dividers = dividerLayout(req.bin);
+  if (req.bin.removableDividers === 'both' && dividers.x.length && dividers.y.length) result.info.push(`With dividers both ways, install plates at the marked positions: X at ${dividers.installX.join(', ')}, Y at ${dividers.installY.join(', ')} mm`);
   for (const axis of ['x', 'y'] as const) {
     if (!dividers[axis].length) continue;
+    result.info.push(`Print ${axis === 'x' ? req.bin.dividerCountX : req.bin.dividerCountY} removable ${axis.toUpperCase()} divider plates`);
     let plate = toMesh(`${base}-divider-${axis}`, printableDivider(req.bin, axis), req.print);
     plate = shift(plate, 0, cardY - plate.max[1]);
     cardY = plate.min[1] - 5;
