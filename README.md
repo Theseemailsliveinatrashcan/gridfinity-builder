@@ -26,6 +26,10 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 - Size in units, or fit a drawer in mm with adjustable padding position
 - Thin (open frame), solid bottom, or weighted styles; magnet holes
 - Screw-down holes (M3, countersunk or counterbored) to fix a plate into a drawer
+- Half-cell fill: when fitting a drawer leaves 21 mm or more, add a row of half-width sockets for half-unit bins
+
+**Spacers**
+- Straight or corner (L) strips that fill the gap between a baseplate and the drawer wall, with height presets matching each plate style and an optional ledge the plate rests on
 
 **Split to fit your print bed**
 - Cuts only along grid lines, into the fewest and most even pieces (a 7-unit plate on a 5-unit bed becomes 4 + 3, not 5 + 2)
