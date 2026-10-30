@@ -133,8 +133,8 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     }
     return {
       part: buildPlate(p),
-      x: { cells: Array(L.x.units).fill(GRID), padStart: L.x.padStart, padEnd: L.x.padEnd, origin: L.x.padStart },
-      y: { cells: Array(L.y.units).fill(GRID), padStart: L.y.padStart, padEnd: L.y.padEnd, origin: L.y.padStart },
+      x: { cells: L.x.cells, padStart: L.x.padStart, padEnd: L.x.padEnd, origin: L.x.padStart },
+      y: { cells: L.y.cells, padStart: L.y.padStart, padEnd: L.y.padEnd, origin: L.y.padStart },
       connector,
       base: `gridfinity-baseplate-${L.x.units}x${L.y.units}`,
       warnings,

@@ -133,6 +133,7 @@ export const SECTIONS: Section[] = [
       plate({ key: 'depth', label: 'Depth', kind: 'number', min: 1, max: 30, step: 1, unit: 'units', show: (s) => !(s.plate.drawerD > 0) }),
       plate({ key: 'drawerW', label: 'Fit drawer width', kind: 'number', min: 0, max: 2000, step: 1, unit: 'mm', help: '0 = off. Fills the drawer with whole cells and pads the rest.' }),
       plate({ key: 'drawerD', label: 'Fit drawer depth', kind: 'number', min: 0, max: 2000, step: 1, unit: 'mm' }),
+      plate({ key: 'halfCells', label: 'Fill drawer gaps with half cells', kind: 'toggle', show: s => s.plate.drawerW > 0 || s.plate.drawerD > 0, help: 'Uses spare 21 mm rows or columns on the padded side; magnets and weight pockets stay in whole cells.' }),
       plate({ key: 'alignX', label: 'Padding left ↔ right', kind: 'range', min: -1, max: 1, step: 0.1, show: (s) => s.plate.drawerW > 0, help: 'Left end: all padding on the left. Middle: split evenly.' }),
       plate({ key: 'alignY', label: 'Padding front ↔ back', kind: 'range', min: -1, max: 1, step: 0.1, show: (s) => s.plate.drawerD > 0 }),
       plate({ key: 'style', label: 'Style', kind: 'select', options: [['thin', 'Thin (open frame)'], ['solid', 'Solid bottom'], ['weighted', 'Weighted']] }),
