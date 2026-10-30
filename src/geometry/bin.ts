@@ -1,3 +1,4 @@
+import { addDividerRails } from './dividers';
 import type { Manifold, Vec2 } from 'manifold-3d';
 import {
   BASE_PROFILE,
@@ -64,6 +65,10 @@ export interface BinParams {
   scoopSides: 'front' | 'all';
   solid: boolean;
   vase: boolean;
+  removableDividers: 'none' | 'x' | 'y' | 'both';
+  slotPitch: number;
+  slotWidth: number;
+  dividerThickness: number;
   magnets: boolean;
   screws: boolean;
   cornerHolesOnly: boolean;
@@ -90,6 +95,10 @@ export const defaultBin: BinParams = {
   scoopSides: 'front',
   solid: false,
   vase: false,
+  removableDividers: 'none',
+  slotPitch: 5,
+  slotWidth: 2.5,
+  dividerThickness: 2.2,
   magnets: false,
   screws: false,
   cornerHolesOnly: false,
@@ -129,7 +138,7 @@ export interface BinLayout {
 export function vaseBinParams(p: BinParams): BinParams {
   return p.vase ? { ...p, solid: true, heightMode: 'units', wall: defaultBin.wall, floor: defaultBin.floor,
     compartmentsX: 1, compartmentsY: 1, tab: 'none', labelSlot: 'none', cardPlay: 0.25,
-    scoop: 0, scoopSides: 'front', magnets: false, screws: false, cornerHolesOnly: false, withLid: false } : p;
+    scoop: 0, scoopSides: 'front', removableDividers: 'none', magnets: false, screws: false, cornerHolesOnly: false, withLid: false } : p;
 }
 
 export function binLayout(p: BinParams): BinLayout {
@@ -418,7 +427,7 @@ export function buildBin(p: BinParams): Manifold {
   solid = subtractAll(solid, cutters);
 
   const inside = interior(p, L, slots);
-  const result = inside ? solid.add(inside) : solid;
+  const result = addDividerRails(inside ? solid.add(inside) : solid, p);
   for (const slot of slots) {
     if (Math.abs(labelCardSweep(slot, p.cardPlay, result).intersect(result).volume()) > 1e-7) throw new Error('Compartments too narrow for label cards');
   }

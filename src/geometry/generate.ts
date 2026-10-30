@@ -1,3 +1,4 @@
+import { dividerLayout, printableDivider } from './dividers';
 import { unionAll } from './kernel';
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, vaseBinParams, vaseGrams, buildBin, buildLabelCard, labelCardSlots, cellPitches, validateBin, type BinParams } from './bin';
@@ -306,6 +307,15 @@ export function generate(req: GenerateRequest): GenerateResult {
     cardY = card.min[1] - 5;
     result.pieces.push(card);
     if (!card.fitsBed) result.warnings.push('Label card is larger than the print bed.');
+  }
+  const dividers = dividerLayout(req.bin);
+  for (const axis of ['x', 'y'] as const) {
+    if (!dividers[axis].length) continue;
+    let plate = toMesh(`${base}-divider-${axis}`, printableDivider(req.bin, axis), req.print);
+    plate = shift(plate, 0, cardY - plate.max[1]);
+    cardY = plate.min[1] - 5;
+    result.pieces.push(plate);
+    if (!plate.fitsBed) result.warnings.push('Removable divider is larger than the print bed.');
   }
   if (!req.bin.withLid) return result;
   if (req.bin.lip !== 'normal') {

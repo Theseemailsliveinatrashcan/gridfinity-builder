@@ -75,6 +75,10 @@ export const SECTIONS: Section[] = [
     title: 'Compartments',
     kinds: ['bin'],
     fields: [
+      bin({ key: 'removableDividers', label: 'Removable dividers', kind: 'select', options: [['none', 'None'], ['x', 'Along X'], ['y', 'Along Y'], ['both', 'Both (interlocking)']], show: s => !s.bin.vase && !s.bin.solid }),
+      bin({ key: 'slotPitch', label: 'Divider slot pitch', kind: 'number', min: 4, max: 20, step: 1, unit: 'mm', show: s => !s.bin.vase && !s.bin.solid && s.bin.removableDividers !== 'none' }),
+      bin({ key: 'slotWidth', label: 'Divider slot width', kind: 'number', min: 2, max: 4, step: 0.1, unit: 'mm', show: s => !s.bin.vase && !s.bin.solid && s.bin.removableDividers !== 'none' }),
+      bin({ key: 'dividerThickness', label: 'Divider thickness', kind: 'number', min: 1, max: 3, step: 0.1, unit: 'mm', show: s => !s.bin.vase && !s.bin.solid && s.bin.removableDividers !== 'none', help: 'Plates clear the narrowest lip opening; slots interrupt crossing fixed walls.' }),
       bin({ key: 'compartmentsX', label: 'Across', kind: 'number', min: 1, max: 12, step: 1, show: (s) => !s.bin.solid && !s.bin.vase }),
       bin({ key: 'compartmentsY', label: 'Front to back', kind: 'number', min: 1, max: 12, step: 1, show: (s) => !s.bin.solid && !s.bin.vase }),
       bin({
