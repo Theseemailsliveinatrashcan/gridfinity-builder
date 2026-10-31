@@ -21,6 +21,8 @@
         <button type="button" data-kind="spacer">Spacer</button>
         <button type="button" data-kind="tile" title="Experimental MultiBoard-compatible wall tile">MultiBoard</button>
       </nav>
+      <button type="button" id="planner-mode">Planner</button>
+      <div id="planner-panel" hidden></div>
       <div id="form"></div>
       <button type="button" id="reset" class="link">Reset to defaults</button>
       <footer>
@@ -37,6 +39,7 @@
       </footer>
     </aside>
     <main>
+      <div id="planner-canvas" hidden></div>
       <div id="viewport"></div>
       <section id="results" aria-live="polite">
         <div id="status"></div>

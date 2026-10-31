@@ -82,3 +82,11 @@ Geometry is built with [manifold-3d](https://github.com/elalish/manifold) (WebAs
 - Code in this repository: MIT, see [LICENSE](LICENSE).
 - [Gridfinity](https://gridfinity.xyz) was created by Zack Freedman and released under the MIT license. Dimensions follow [gridfinity-rebuilt-openscad](https://github.com/kennetek/gridfinity-rebuilt-openscad) (MIT); no code was copied from it.
 - **MultiBoard:** the tile generator is an independent, experimental design modelled from publicly reported measurements, compatible with [MultiBoard](https://www.multiboard.io). It is not affiliated with or endorsed by MultiBoard Ltd, and it contains no MultiBoard files or code. MultiBoard's own designs are covered by the [MultiBoard license](https://www.multiboard.io/license). Threads and snaps are not modelled yet; print a small test tile before printing a wall.
+
+## Drawer planner (Patch A)
+
+Planner is a separate mode for arranging bins and holders on an integral baseplate. Drawer dimensions are millimetres; the fit gap applies on each side. Item coordinates are 21 mm ticks from the socket-grid origin after padding. Half-unit snapping alone does not guarantee fit: each rotated foot sequence must match the actual socket cells.
+
+Add, duplicate, move, resize, rotate or delete items in the SVG editor, or use the item list and numeric fields. Arrow keys move to the next compatible half/full-unit position; Shift arrows resize. Invalid edits are rejected without changing the document. A selected item uses the existing geometry preview and individual-part downloads; batch generation and assembled previews are later patches.
+
+Share link writes a versioned `#p1.` raw-deflate/base64url link (16 KiB encoded maximum, 256 KiB inflated maximum). Existing single-part links still open. Larger layouts can use Import/Export layout.json; imports have the same 256 KiB JSON limit. Documents allow 64 items. Separate spacers and batch/BOM exports are not included yet.
