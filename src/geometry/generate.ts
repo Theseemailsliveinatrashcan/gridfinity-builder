@@ -5,7 +5,7 @@ import { binLayout, vaseBinParams, vasePrintStats, buildBin, buildLabelCard, lab
 import { buildPlate, plateLayout, plateHardwareCutters, plateConnectionCutters, type PlateParams } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
-import { buildLid, defaultLid, type LidParams } from './lid';
+import { buildLid, defaultLid, refinedLidDirections, type LidParams } from './lid';
 import { BASE_PROFILE_HEIGHT, BASE_TOP_SIZE_GAP, GRID, LIP_HEIGHT, LIP_TIP_TRIM } from './constants';
 import { buildTile, MB_PITCH, type TileParams } from './multiboard';
 import { DOVETAIL_DEPTH, planSplit, splitPart, tabSolid, type AxisSpec, type Connector, type Piece } from './split';
@@ -125,6 +125,10 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
   if (req.kind === 'lid') {
     const p = req.lid;
     const gap = -BASE_TOP_SIZE_GAP / 2;
+    if (p.magnets && p.magnetStyle === 'refined') {
+      const blocked = refinedLidDirections(p).filter((d) => d.angle === undefined).length;
+      if (blocked) warnings.push(`${blocked} inner magnet pocket${blocked === 1 ? '' : 's'} can't be side-loaded on a lid this size, so ${blocked === 1 ? 'it uses' : 'they use'} a plain pocket.`);
+    }
     return {
       part: buildLid(p),
       x: { cells: cellPitches(p.width), padStart: gap, padEnd: gap, origin: -p.width * GRID / 2 },

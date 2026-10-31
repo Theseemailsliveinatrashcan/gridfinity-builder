@@ -22,7 +22,8 @@ export function magnetCutter(style: MagnetStyle = 'plain', chamfer = false): Man
       return [radius * Math.cos(a), radius * Math.sin(a)];
     });
     hole = prism(k().CrossSection.ofPolygons([points]), -0.01, MAGNET_DEPTH);
-  } else hole = cylinderAt(0, 0, -0.01, MAGNET_DEPTH, r, 128);
-  if (chamfer) hole = hole.add(k().Manifold.cylinder(MAGNET_CHAMFER + 0.01, r + MAGNET_CHAMFER + 0.01, r, 128).translate([0, 0, -0.01]));
+  } else hole = cylinderAt(0, 0, -0.01, MAGNET_DEPTH, r, 32);
+  // Plain circles stay at 32 segments; only the crush-rib wave needs fine sampling.
+  if (chamfer) hole = hole.add(k().Manifold.cylinder(MAGNET_CHAMFER + 0.01, r + MAGNET_CHAMFER + 0.01, r, 32).translate([0, 0, -0.01]));
   return hole;
 }

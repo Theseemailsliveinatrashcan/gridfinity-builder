@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { buildBin, defaultBin } from '../src/geometry/bin';
 import { buildLid, defaultLid } from '../src/geometry/lid';
 import { buildHolder, defaultHolder } from '../src/geometry/holder';
@@ -49,4 +49,25 @@ it('all magnet styles keep split-bin dovetails in the floor above the cutters', 
     const result=generate({...structuredClone(DEFAULTS),bin:{...defaultBin,width:6,depth:2,height:3,magnets:true,magnetStyle},print:{...DEFAULTS.print,split:true,bedX:180,bedY:180,connector:'dovetail'}});
     expect(result.pieces.length).toBe(2); expect(result.pieces.every(p=>p.fitsBed)).toBe(true);
   }
+});
+
+describe('refined lid pockets are loadable', () => {
+  it('every refined pocket on a lid has a clear magnet path to the outside', async () => {
+    const { initKernel, freeAll, k, cylinderAt } = await import('../src/geometry/kernel');
+    const { buildLid, defaultLid, refinedLidDirections } = await import('../src/geometry/lid');
+    await initKernel();
+    for (const [width, depth] of [[1, 1], [2, 1], [2, 2], [3, 3]]) {
+      const p = { ...defaultLid, width, depth, magnets: true, magnetStyle: 'refined' as const };
+      const lid = buildLid(p);
+      for (const { x, y, angle } of refinedLidDirections(p)) {
+        if (angle === undefined) continue;
+        // Sweep a slightly undersized magnet (Ø5.8 × 1.8) from the pocket out along its slot.
+        const a = (angle * Math.PI) / 180;
+        const sweep = k().Manifold.hull([0, 30].map((t) => cylinderAt(x + t * Math.cos(a), y + t * Math.sin(a), 0.45, 2.25, 2.9)));
+        expect(sweep.intersect(lid).volume(), `${width}x${depth} pocket at ${x},${y}`).toBeLessThan(1e-6);
+      }
+      if (width === 3) expect(refinedLidDirections(p).some((d) => d.angle === undefined)).toBe(true);
+    }
+    freeAll();
+  });
 });
