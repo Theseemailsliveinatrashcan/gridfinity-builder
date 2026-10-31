@@ -205,3 +205,37 @@ it('regenerates uncached print jobs serially and aborts the in-flight worker wit
   expect(workers.filter(worker => !worker.terminated).length).toBe(0);
   queue.dispose();
 });
+
+describe('review regressions', () => {
+  it('turns a piece that is too deep (not too wide) for the bed when that makes it fit', async () => {
+    const doc = structuredClone(defaultPlanner);
+    doc.drawer = { widthMm: 300, depthMm: 300, fitGapMm: 0 };
+    doc.print = { ...doc.print, split: true, bedX: 220, bedY: 180 };
+    doc.items = [{ ...item('tall', 0, 0), w2: 4, d2: 10 }];
+    const generated = results(doc);
+    const { blob, manifest } = await exportDrawer(doc, { format: '3mf', material: 'PLA', progress: () => {}, load: async job => generated.get(jobKey(job))! });
+    const model = strFromU8((await archiveFiles(blob))['3D/3dmodel.model']);
+    const tall = manifest.parts.findIndex(part => part.dimensions[1] > 180 && part.dimensions[0] <= 180);
+    expect(tall).toBeGreaterThanOrEqual(0);
+    const placed = [...model.matchAll(/<item objectid="(\d+)" transform="([^"]+)"/g)].filter(m => Number(m[1]) - 1 === tall);
+    expect(placed.length).toBeGreaterThan(0);
+    for (const m of placed) {
+      const values = m[2].split(' ').map(Number);
+      expect(values[0]).toBe(0); // rotated 90°
+      // Rows may continue past one plate by design; the turned footprint itself must fit the bed.
+      const [w, d] = manifest.parts[tall].dimensions;
+      expect(d).toBeLessThanOrEqual(220);
+      expect(w).toBeLessThanOrEqual(180);
+      expect(values[9] + d / 2).toBeLessThanOrEqual(220 + 1e-3);
+    }
+  }, 20_000);
+
+  it('literalizes formula-leading text cells in the BOM', () => {
+    const manifest = buildManifest(layout(), results(layout()));
+    const tweaked = { ...manifest, parts: manifest.parts.map((p, i) => i === 0 ? { ...p, sourceItemIds: ['-1-2'], splitGroup: '=HYPERLINK("x")' } : p) };
+    const csv = manifestCsv(tweaked);
+    expect(csv).toContain('"\'-1-2"');
+    expect(csv).toContain('"\'=HYPERLINK(""x"")"');
+    expect(csv).not.toMatch(/(^|,)"[=+\-@]/m);
+  }, 20_000);
+});

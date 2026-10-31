@@ -148,7 +148,10 @@ export class ThreeMfStream {
       await exportCheckpoint(this.signal);
     }
     this.write('</triangles></mesh></object>');
-    const rotated = dimensions[0] > this.bed.bedX && dimensions[1] <= this.bed.bedX && dimensions[0] <= this.bed.bedY;
+    // Turn a piece 90° only when it doesn't fit as is but does when turned (either axis can be the problem).
+    const normalFits = dimensions[0] <= this.bed.bedX && dimensions[1] <= this.bed.bedY;
+    const rotatedFits = dimensions[1] <= this.bed.bedX && dimensions[0] <= this.bed.bedY;
+    const rotated = !normalFits && rotatedFits;
     const width = rotated ? dimensions[1] : dimensions[0];
     const depth = rotated ? dimensions[0] : dimensions[1];
     for (let copy = 0; copy < (object.quantity ?? 1); copy++) {

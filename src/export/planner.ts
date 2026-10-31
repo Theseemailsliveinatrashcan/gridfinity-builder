@@ -82,7 +82,12 @@ export function buildManifest(doc: PlannerDocument, results: ReadonlyMap<string,
   return summarizeManifest(parts, material);
 }
 
-const csv = (value: string | number | boolean) => '"' + String(value).replaceAll('"', '""') + '"';
+/** Quote a CSV cell; text that a spreadsheet could read as a formula is prefixed with ' (OWASP CSV injection). */
+const csv = (value: string | number | boolean) => {
+  let text = String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) text = "'" + text;
+  return '"' + text.replaceAll('"', '""') + '"';
+};
 export function manifestCsv(manifest: PrintManifest): string {
   const header = ['part', 'role', 'qty', 'width_mm', 'depth_mm', 'height_mm', 'split_group', 'source_item_ids', 'est_grams', 'material', 'fits_bed'];
   const rows = manifest.parts.map(part => [
