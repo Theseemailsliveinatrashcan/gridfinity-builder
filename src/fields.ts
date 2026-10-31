@@ -1,3 +1,4 @@
+import { HOLDER_PRESET_GROUPS, presetItems } from './geometry/holder-presets';
 import { SPACER_HEIGHTS } from './geometry/spacer';
 import { presetValues } from './geometry/holder';
 import type { GenerateRequest, PartKind } from './geometry/generate';
@@ -13,6 +14,7 @@ export interface Field {
   max?: number;
   step?: number;
   options?: [string, string][];
+  optionGroups?: Record<string,string>;
   help?: string;
   unit?: string;
   show?: (s: GenerateRequest) => boolean;
@@ -137,18 +139,18 @@ export const SECTIONS: Section[] = [
     title: 'Holder — Pockets',
     kinds: ['holder'],
     fields: [
-      holder({ key: 'preset', label: 'Item preset', kind: 'select', options: [['aa', 'AA battery'], ['aaa', 'AAA battery'], ['18650', '18650 cell'], ['21700', '21700 cell'], ['cr2032', 'CR2032 coin cell'], ['hex14', '¼″ hex bit'], ['hex4', '4 mm hex bit'], ['sd', 'SD card'], ['microsd', 'microSD card'], ['pen', 'Pen'], ['marker', 'Marker'], ['socket14', '¼″ socket drive'], ['socket38', '⅜″ socket drive'], ['custom', 'Custom (keep values)']], help: 'Presets include typical clearance. Check the dimensions of your items and test-print the fit first.' }),
-      holder({ key: 'shape', label: 'Shape', kind: 'select', options: [['round', 'Round pocket'], ['hex', 'Hex pocket'], ['slot', 'Card slot'], ['post', 'Square post']] }),
-      holder({ key: 'size', label: 'Item size', kind: 'number', min: 2, max: 100, step: 0.1, unit: 'mm', help: 'Diameter, hex across flats, slot length, or square post side.' }),
-      holder({ key: 'slotThickness', label: 'Slot thickness', kind: 'number', min: 0.5, max: 30, step: 0.1, unit: 'mm', show: s => s.holder.shape === 'slot' }),
-      holder({ key: 'pocketDepth', label: 'Pocket depth / post height', kind: 'number', min: 0.5, max: 100, step: 0.1, unit: 'mm' }),
-      holder({ key: 'clearance', label: 'Item clearance per side', kind: 'number', min: 0, max: 2, step: 0.05, unit: 'mm', help: 'Added to pockets; subtracted from posts. Presets set this to 0.' }),
+      holder({ key: 'preset', label: 'Item preset', kind: 'select', options: HOLDER_PRESET_GROUPS.flatMap(group=>group.options), optionGroups: Object.fromEntries(HOLDER_PRESET_GROUPS.flatMap(group=>group.options.map(([value])=>[value,group.label]))), help: 'Preset sizes include clearance. Sets pack one of each item, ascending by size. Row labels use nominal sizes in mm. Test-print the fit first.' }),
+      holder({ key: 'shape', label: 'Shape', kind: 'select', options: [['round', 'Round pocket'], ['hex', 'Hex pocket'], ['slot', 'Card slot'], ['rect', 'Rectangular pocket'], ['post', 'Square post']], show: s => !presetItems(s.holder.preset) }),
+      holder({ key: 'size', label: 'Item size', kind: 'number', min: 0.5, max: 100, step: 0.1, unit: 'mm', help: 'Diameter, hex across flats, slot length, or square post side.', show: s => !presetItems(s.holder.preset) }),
+      holder({ key: 'slotThickness', label: 'Slot / rectangular short side', kind: 'number', min: 0.5, max: 30, step: 0.1, unit: 'mm', show: s => !presetItems(s.holder.preset) && (s.holder.shape === 'slot' || s.holder.shape === 'rect') }),
+      holder({ key: 'pocketDepth', label: 'Pocket depth / post height', kind: 'number', min: 0.5, max: 100, step: 0.1, unit: 'mm', show: s => !presetItems(s.holder.preset) }),
+      holder({ key: 'clearance', label: 'Item clearance per side', kind: 'number', min: 0, max: 2, step: 0.05, unit: 'mm', help: 'Added to pockets; subtracted from posts. Presets set this to 0.', show: s => !presetItems(s.holder.preset) }),
       holder({ key: 'spacing', label: 'Spacing', kind: 'number', min: 0.5, max: 60, step: 0.1, unit: 'mm', help: 'Gap between pockets; for posts, centre pitch minus the specified post size.' }),
       holder({ key: 'margin', label: 'Inner wall margin', kind: 'number', min: 0, max: 30, step: 0.5, unit: 'mm' }),
-      holder({ key: 'layout', label: 'Layout', kind: 'select', options: [['grid', 'Grid'], ['staggered', 'Staggered (round / hex)']] }),
-      holder({ key: 'hexPointForward', label: 'Hex point forward', kind: 'toggle', show: s => s.holder.shape === 'hex' }),
-      holder({ key: 'slotLean', label: 'Lean toward back', kind: 'number', min: 0, max: 15, step: 1, unit: '°', show: s => s.holder.shape === 'slot' }),
-      holder({ key: 'fingerNotch', label: 'Finger notch', kind: 'toggle', show: s => s.holder.shape === 'round' }),
+      holder({ key: 'layout', label: 'Layout', kind: 'select', options: [['grid', 'Grid'], ['staggered', 'Staggered (round / hex)']], show: s => !presetItems(s.holder.preset) }),
+      holder({ key: 'hexPointForward', label: 'Hex point forward', kind: 'toggle', show: s => !presetItems(s.holder.preset) && (s.holder.shape === 'hex') }),
+      holder({ key: 'slotLean', label: 'Lean toward back', kind: 'number', min: 0, max: 15, step: 1, unit: '°', show: s => !presetItems(s.holder.preset) && (s.holder.shape === 'slot') }),
+      holder({ key: 'fingerNotch', label: 'Finger notch', kind: 'toggle', show: s => !presetItems(s.holder.preset) && (s.holder.shape === 'round') }),
     ],
   },
   {

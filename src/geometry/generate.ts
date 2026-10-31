@@ -119,7 +119,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       x: { cells: cellPitches(p.width), padStart: gap, padEnd: gap, origin: -p.width * GRID / 2 },
       y: { cells: cellPitches(p.depth), padStart: gap, padEnd: gap, origin: -p.depth * GRID / 2 },
       base: `gridfinity-holder-${p.preset}-${p.width}x${p.depth}`, warnings,
-      info: layout.count ? [`Holds ${layout.count} item${layout.count === 1 ? '' : 's'}`] : [],
+      info: layout.total !== undefined ? [layout.count < layout.total ? `${layout.count} of ${layout.total} fit — enlarge the holder` : `Holds ${layout.count} items`, ...layout.rows.map((row,i)=>`Row ${i+1}: ${row.join(', ')} mm`)] : layout.count ? [`Holds ${layout.count} item${layout.count === 1 ? '' : 's'}`] : [],
     };
   }
   if (req.kind === 'lid') {

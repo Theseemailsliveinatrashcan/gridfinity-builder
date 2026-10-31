@@ -139,7 +139,15 @@ function input(f: Field): HTMLElement {
     wrap.append(el, title);
   } else if (f.kind === 'select') {
     const el = document.createElement('select');
-    for (const [v, text] of f.options ?? []) el.add(new Option(text, v, false, v === value));
+    const groups = new Map<string, HTMLOptGroupElement>();
+    for (const [v, text] of f.options ?? []) {
+      const name = f.optionGroups?.[v];
+      if (name && !groups.has(name)) {
+        const group = document.createElement('optgroup'); group.label = name;
+        groups.set(name, group); el.append(group);
+      }
+      (name ? groups.get(name)! : el).append(new Option(text, v, false, v === value));
+    }
     el.onchange = () => {
       groupOf(f)[f.key] = el.value;
       const others = onFieldChange(state, f);

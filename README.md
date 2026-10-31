@@ -27,6 +27,8 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 **Holders**
 - A bin filled with a grid of pockets for one item: AA, AAA, 18650, 21700 and CR2032 batteries; 1/4" and 4 mm hex bits; SD and microSD cards; pens and markers; posts for 1/4" and 3/8" sockets; or custom round, hex, slot or post shapes
 - Straight or staggered rows, finger notches, leaning card slots; height fits the pockets automatically, and the app shows how many items fit
+- Grouped presets also cover 9V, C/D, AAAA and cylindrical cells; button cells; metric/fractional drill indexes; metric/SAE hex keys; US/Euro/UK coin tubes; and M3–M8 nuts
+- Graduated sets pack one pocket per size, ascending left to right and then into new rows, with row-size lists in mm and a partial-fit count when space runs out. Auto height fits the deepest tube or pocket. No embossed labels are generated.
 - Preset sizes include typical clearance; test-print the fit first
 
 **Baseplates**

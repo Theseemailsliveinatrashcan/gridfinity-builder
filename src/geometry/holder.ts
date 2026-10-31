@@ -1,10 +1,11 @@
+import { SINGLE_PRESETS, presetItems, type NewHolderPreset } from './holder-presets';
 import { type MagnetOptions } from './magnets';
 import type { CrossSection, Manifold, Vec2 } from 'manifold-3d';
 import { binLayout, buildBin, defaultBin, type BinParams, type LipStyle } from './bin';
 import { BASE_PROFILE_HEIGHT, BASE_TOP_RADIUS, HEIGHT_UNIT, SCREW_DEPTH } from './constants';
 import { k, loft, prism, roundedRect, subtractAll } from './kernel';
 
-export type HolderPreset = 'aa' | 'aaa' | '18650' | '21700' | 'cr2032' | 'hex14' | 'hex4' | 'sd' | 'microsd' | 'pen' | 'marker' | 'socket14' | 'socket38' | 'custom';
+export type HolderPreset = 'aa' | 'aaa' | '18650' | '21700' | 'cr2032' | 'hex14' | 'hex4' | 'sd' | 'microsd' | 'pen' | 'marker' | 'socket14' | 'socket38' | 'custom' | NewHolderPreset;
 export interface HolderParams extends MagnetOptions {
   width: number;
   depth: number;
@@ -14,7 +15,7 @@ export interface HolderParams extends MagnetOptions {
   heightMode: 'auto' | 'units';
   height: number;
   preset: HolderPreset;
-  shape: 'round' | 'hex' | 'slot' | 'post';
+  shape: 'round' | 'hex' | 'slot' | 'rect' | 'post';
   size: number;
   slotThickness: number;
   pocketDepth: number;
@@ -32,6 +33,10 @@ export function presetValues(preset: HolderPreset): Partial<HolderParams> {
   const common = { clearance: 0, spacing: 2, slotThickness: 2.4, slotLean: 0, fingerNotch: false };
   const round = (size: number, pocketDepth: number): Partial<HolderParams> => ({ ...common, shape: 'round', size, pocketDepth });
   const hex = (size: number, pocketDepth: number): Partial<HolderParams> => ({ ...common, shape: 'hex', size, pocketDepth });
+  const single = SINGLE_PRESETS[preset as keyof typeof SINGLE_PRESETS];
+  if(single) return {...common, ...single};
+  const items=presetItems(preset);
+  if(items) return {...common, shape:items[0].shape, size:items[0].size, fingerNotch:!!items[0].fingerNotch, pocketDepth:Math.max(...items.map(item=>item.pocketDepth))};
   switch (preset) {
     case 'aa': return round(15.1, 13);
     case 'aaa': return round(11.1, 11);
@@ -46,6 +51,7 @@ export function presetValues(preset: HolderPreset): Partial<HolderParams> {
     case 'marker': return round(13.8, 20);
     case 'socket14': return { ...common, shape: 'post', size: 6.2, pocketDepth: 7, spacing: 22 - 6.2 };
     case 'socket38': return { ...common, shape: 'post', size: 9.4, pocketDepth: 9, spacing: 30 - 9.4 };
+    default: throw new Error('Unknown holder preset.');
   }
 }
 
@@ -59,18 +65,20 @@ export const defaultHolder: HolderParams = {
 function validate(p: HolderParams): void {
   if (![p.width, p.depth].every(n => Number.isFinite(n) && n >= 0.5 && n <= 12 && Number.isInteger(n * 2))) throw new Error('Holder width and depth must use half-unit steps from 0.5 to 12.');
   if (![p.size, p.slotThickness, p.pocketDepth, p.height].every(n => Number.isFinite(n) && n > 0) || ![p.spacing, p.margin, p.clearance, p.slotLean].every(n => Number.isFinite(n) && n >= 0)) throw new Error('Holder dimensions must be positive, with nonnegative spacing and clearance.');
-  if (p.slotLean > 15 || !['round', 'hex', 'slot', 'post'].includes(p.shape)) throw new Error('Invalid holder shape or slot lean (0–15°).');
+  if (p.slotLean > 15 || !['round', 'hex', 'slot', 'rect', 'post'].includes(p.shape)) throw new Error('Invalid holder shape or slot lean (0–15°).');
   if (p.shape === 'post' && p.size - 2 * p.clearance <= 1.6) throw new Error('Post size after clearance must exceed 1.6 mm for the top chamfer.');
 }
 
 export function holderBinParams(p: HolderParams): BinParams {
+  const set=presetItems(p.preset);
+  if(set) p={...p,shape:set[0].shape,pocketDepth:Math.max(...set.map(item=>item.pocketDepth))};
   validate(p);
   const base = { ...defaultBin, width: p.width, depth: p.depth, lip: p.lip, magnets: p.magnets, magnetStyle: p.magnetStyle, magnetChamfer: p.magnetChamfer, screws: p.screws, heightMode: 'units' as const };
   const L = binLayout(base);
   const support = L.top - L.interiorTop;
   // Keep a roof over the standard screw bores as well as the 1.2 mm pocket floor.
   const bottom = Math.max(BASE_PROFILE_HEIGHT + 1.2, p.screws ? SCREW_DEPTH + 0.6 : 0);
-  const needed = p.shape === 'post' ? L.floorZ + p.pocketDepth + 3 + support : bottom + p.pocketDepth + support;
+  const needed = p.shape === 'post' ? L.floorZ + p.pocketDepth + 3 + support : bottom + Math.max(p.pocketDepth, ... (presetItems(p.preset)?.map(item=>item.pocketDepth) ?? [])) + support;
   const height = p.heightMode === 'auto' ? Math.ceil((needed - 1e-9) / HEIGHT_UNIT) : p.height;
   if (!Number.isInteger(height) || height * HEIGHT_UNIT < needed - 1e-6) throw new Error(`Holder height is too low; use at least ${Math.ceil(needed / HEIGHT_UNIT)} height units or Auto height.`);
   const params = { ...base, height };
@@ -91,7 +99,7 @@ export function holderOutline(p: HolderParams): CrossSection {
     const angle = p.hexPointForward ? Math.PI / 2 : 0;
     return k().CrossSection.ofPolygons([Array.from({ length: 6 }, (_, i) => [radius * Math.cos(angle + i * Math.PI / 3), radius * Math.sin(angle + i * Math.PI / 3)] as Vec2)]);
   }
-  const d = p.shape === 'slot' ? p.slotThickness + 2 * p.clearance : size;
+  const d = (p.shape === 'slot' || p.shape === 'rect') ? p.slotThickness + 2 * p.clearance : size;
   return k().CrossSection.square([size, d], true);
 }
 
@@ -107,6 +115,8 @@ export function holderPocket(p: HolderParams, top: number, x = 0, y = 0): Manifo
 export function holderLayout(p: HolderParams) {
   const bin = holderBinParams(p);
   const L = binLayout(bin);
+  const set=presetItems(p.preset);
+  if(set) return setLayout(p, bin, set);
   const outline = holderOutline(p);
   const bounds = outline.bounds();
   const w = bounds.max[0] - bounds.min[0];
@@ -141,12 +151,13 @@ export function holderLayout(p: HolderParams) {
     }
     centres.push([x, y + shiftY]);
   }
-  return { bin, surface: L.floorZ, centres, count: centres.length };
+  return { bin, surface: L.floorZ, centres, count: centres.length, total: undefined as number | undefined, items: undefined as PlacedItem[] | undefined, rows: [] as string[][] };
 }
 
 export function buildHolder(p: HolderParams): Manifold {
   const layout = holderLayout(p);
   let part = buildBin(layout.bin);
+  if(layout.items) return subtractAll(part,layout.items.map(item=>holderPocket({...p,...item,fingerNotch:!!item.fingerNotch,clearance:0},layout.surface,item.x,item.y)));
   if (p.shape !== 'post') return subtractAll(part, layout.centres.map(([x, y]) => holderPocket(p, layout.surface, x, y)));
   const side = p.size - 2 * p.clearance;
   const half = side / 2;
@@ -162,4 +173,29 @@ export function buildHolder(p: HolderParams): Manifold {
   ]));
   if (posts.length) part = part.add(k().Manifold.union(posts));
   return part;
+}
+
+export interface PlacedItem { shape:'round'|'hex'; size:number; pocketDepth:number; label:string; fingerNotch?:boolean; x:number; y:number; row:number }
+function setLayout(p:HolderParams,bin:BinParams,set:NonNullable<ReturnType<typeof presetItems>>) {
+  const L=binLayout(bin), safe=roundedRect(L.cavW,L.cavD,Math.max(BASE_TOP_RADIUS-L.wall,0.25)).offset(-Math.max(1,p.margin));
+  const w=L.cavW-2*Math.max(1,p.margin),d=L.cavD-2*Math.max(1,p.margin);
+  let x=-w/2,y=-d/2,rowHeight=0,row=0;
+  const items:PlacedItem[]=[],rows:string[][]=[];
+  for(const item of set) {
+    const outline=holderOutline({...p,...item,clearance:0}),bounds=outline.bounds();
+    const iw=bounds.max[0]-bounds.min[0],ih=bounds.max[1]-bounds.min[1];
+    if(x+iw>w/2+1e-6) {x=-w/2;y+=rowHeight+p.spacing;rowHeight=0;row++;}
+    let placed=false;
+    for(let n=0;n<16 && !placed;n++) {
+      if(iw>w+1e-6 || y+ih>d/2+1e-6) break;
+      if(x+iw>w/2+1e-6) {x=-w/2;y+=rowHeight>0?rowHeight+p.spacing:0.5;rowHeight=0;row++;continue;}
+      const cx=x-bounds.min[0],cy=y-bounds.min[1];
+      if(outline.translate([cx,cy]).subtract(safe).area()<1e-6) {
+        items.push({...item,x:cx,y:cy,row});(rows[row]??=[]).push(item.label);
+        x+=iw+p.spacing;rowHeight=Math.max(rowHeight,ih);placed=true;
+      } else if(x===-w/2) {x+=1;} else {x=-w/2;y+=rowHeight+p.spacing;rowHeight=0;row++;}
+    }
+    if(!placed) break;
+  }
+  return {bin,surface:L.floorZ,centres:items.map(item=>[item.x,item.y] as Vec2),count:items.length,total:set.length,items,rows:rows.filter(row=>row.length)};
 }
