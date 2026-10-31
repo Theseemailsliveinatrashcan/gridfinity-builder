@@ -1,8 +1,8 @@
 import { dividerLayout, printableDivider } from './dividers';
-import { unionAll } from './kernel';
+import { unionAll, box } from './kernel';
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, vaseBinParams, vasePrintStats, buildBin, buildLabelCard, labelCardSlots, cellPitches, validateBin, type BinParams } from './bin';
-import { buildPlate, plateLayout, plateHardwareCutters, plateConnectionCutters, type PlateParams } from './baseplate';
+import { buildPlateFromLayout, plateLayout, plateHardwareCutters, plateConnectionCutters, type PlateParams, type PlateLayout } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
 import { buildLid, defaultLid, refinedLidDirections, type LidParams } from './lid';
@@ -43,7 +43,11 @@ export interface MeshOut {
   volume: number;
 }
 
+export interface PartTransform { translation:Vec3; rotation?:number }
+export interface GeneratedPart {partKey:string;role:'body'|'lid'|'label-card'|'divider'|'plate'|'spacer';mesh:MeshOut;quantity:number;assemblyTransform?:PartTransform;displayTransform?:PartTransform}
+export interface GeometryOptions {plateLayout?:PlateLayout;spacerBounds?:Vec3}
 export interface GenerateResult {
+  parts:GeneratedPart[];
   pieces: MeshOut[];
   warnings: string[];
   /** Neutral facts about the part, e.g. how many items a holder takes. */
@@ -70,7 +74,7 @@ function toMesh(name: string, m: Manifold, bed: PrintSettings): MeshOut {
   return { name, positions, indices: new Uint32Array(mesh.triVerts), min: bb.min, max: bb.max, fitsBed, volume: m.volume() };
 }
 
-function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec; connector?: Connector; base: string; warnings: string[]; info?: string[] } {
+function build(req: GenerateRequest, options:GeometryOptions={}): { part: Manifold; x: AxisSpec; y: AxisSpec; connector?: Connector; base: string; warnings: string[]; info?: string[] } {
   const warnings: string[] = [];
   if (req.kind === 'bin') {
     const p = req.bin;
@@ -99,13 +103,13 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
   }
   if (req.kind === 'spacer') {
     const p = req.spacer;
-    const part = buildSpacer(p);
-    const depth = p.shape === 'corner' ? p.length2 : p.width + (p.lip ? 3 : 0);
+    const part = options.spacerBounds ? box(0,options.spacerBounds[0],0,options.spacerBounds[1],0,options.spacerBounds[2]) : buildSpacer(p);
+    const depth = options.spacerBounds?.[1] ?? (p.shape === 'corner' ? p.length2 : p.width + (p.lip ? 3 : 0));
     return {
       part,
-      x: { cells: spacerCells(p.length), padStart: 0, padEnd: 0, origin: 0 },
-      y: { cells: p.shape === 'corner' ? spacerCells(depth) : [depth], padStart: 0, padEnd: 0, origin: 0 },
-      base: `gridfinity-spacer-${p.length}x${p.width}`, warnings,
+      x: { cells: spacerCells(options.spacerBounds?.[0]??p.length), padStart: 0, padEnd: 0, origin: 0 },
+      y: { cells: options.spacerBounds || p.shape === 'corner' ? spacerCells(depth) : [depth], padStart: 0, padEnd: 0, origin: 0 },
+      base: `gridfinity-spacer-${options.spacerBounds?.[0]??p.length}x${options.spacerBounds?.[1]??p.width}`, warnings,
     };
   }
   if (req.kind === 'holder') {
@@ -139,7 +143,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
   }
   if (req.kind === 'plate') {
     const p = req.plate;
-    const L = plateLayout(p);
+    const L = options.plateLayout??plateLayout(p);
     let connector: Connector | undefined;
     if (req.print.split && req.print.connector === 'dovetail' && !p.connectScrews && p.style !== 'skeletonized') {
       if (L.bottom > 0) {
@@ -173,7 +177,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       ? { cells: a.cells, padStart: a.padStart, padEnd: a.padEnd, origin: a.padStart }
       : { cells: [a.length], padStart: 0, padEnd: 0, origin: 0 };
     return {
-      part: buildPlate(p),
+      part: buildPlateFromLayout(L,p),
       x: axis(L.x),
       y: axis(L.y),
       connector,
@@ -227,8 +231,8 @@ function floorConnector(part: Manifold, x: AxisSpec, y: AxisSpec, floorZ: number
   };
 }
 
-function generatePart(req: GenerateRequest): GenerateResult {
-  const { part: initialPart, x, y, connector: plateConnector, base, warnings, info = [] } = build(req);
+function generatePart(req: GenerateRequest,options:GeometryOptions={}): GenerateResult {
+  const { part: initialPart, x, y, connector: plateConnector, base, warnings, info = [] } = build(req,options);
   let part = initialPart;
   let connector = plateConnector;
   let placed = false;
@@ -293,22 +297,12 @@ function generatePart(req: GenerateRequest): GenerateResult {
   if (out.some((m) => !m.fitsBed)) {
     warnings.push(print.split ? 'Some pieces are still larger than the print bed.' : 'This part is larger than the print bed. Turn on "Split to fit bed".');
   }
-  return { pieces: out, warnings, info, size };
+  return { pieces: out, parts:out.map(mesh=>({partKey:mesh.name,role:req.kind==='plate'?'plate':req.kind==='spacer'?'spacer':req.kind==='lid'?'lid':'body',mesh,quantity:1})), warnings, info, size };
 }
 
-/** Move a piece for the preview only; exports re-centre every piece. */
-function shift(p: MeshOut, dx: number, dy = 0): MeshOut {
-  const positions = p.positions.slice();
-  for (let i = 0; i < positions.length; i += 3) {
-    positions[i] += dx;
-    positions[i + 1] += dy;
-  }
-  return { ...p, positions, min: [p.min[0] + dx, p.min[1] + dy, p.min[2]], max: [p.max[0] + dx, p.max[1] + dy, p.max[2]] };
-}
-
-export function generate(req: GenerateRequest): GenerateResult {
+export function generate(req: GenerateRequest, options:GeometryOptions={}): GenerateResult {
   if (req.kind === 'bin') req = { ...req, bin: vaseBinParams(req.bin) };
-  const result = generatePart(req);
+  const result = generatePart(req,options);
   if (req.kind !== 'bin') return result;
   const base = result.pieces[0].name.replace(/-piece-\d+-\d+$/, '');
   const slots = labelCardSlots(req.bin);
@@ -319,9 +313,9 @@ export function generate(req: GenerateRequest): GenerateResult {
   // Lay cards out in a row in front of the bin (preview only).
   let cardY = Math.min(...result.pieces.map((p) => p.min[1])) - 10;
   for (const width of widths) {
-    let card = toMesh(`${base}-label-card-${width}mm`, buildLabelCard(width), req.print);
-    card = shift(card, 0, cardY - card.max[1]);
-    cardY = card.min[1] - 5;
+    const card = toMesh(`${base}-label-card-${width}mm`, buildLabelCard(width), req.print);
+    const dy=cardY-card.max[1];cardY=card.min[1]+dy-5;
+    result.parts.push({partKey:card.name,role:'label-card',mesh:card,quantity:slots.filter(slot=>slot.width===width).length,displayTransform:{translation:[0,dy,0]}});
     result.pieces.push(card);
     if (!card.fitsBed) result.warnings.push('Label card is larger than the print bed.');
   }
@@ -330,9 +324,9 @@ export function generate(req: GenerateRequest): GenerateResult {
   for (const axis of ['x', 'y'] as const) {
     if (!dividers[axis].length) continue;
     result.info.push(`Print ${axis === 'x' ? req.bin.dividerCountX : req.bin.dividerCountY} removable ${axis.toUpperCase()} divider plates`);
-    let plate = toMesh(`${base}-divider-${axis}`, printableDivider(req.bin, axis), req.print);
-    plate = shift(plate, 0, cardY - plate.max[1]);
-    cardY = plate.min[1] - 5;
+    const plate = toMesh(`${base}-divider-${axis}`, printableDivider(req.bin, axis), req.print);
+    const dy=cardY-plate.max[1];cardY=plate.min[1]+dy-5;
+    result.parts.push({partKey:plate.name,role:'divider',mesh:plate,quantity:axis==='x'?req.bin.dividerCountX:req.bin.dividerCountY,displayTransform:{translation:[0,dy,0]}});
     result.pieces.push(plate);
     if (!plate.fitsBed) result.warnings.push('Removable divider is larger than the print bed.');
   }
@@ -348,7 +342,7 @@ export function generate(req: GenerateRequest): GenerateResult {
   // Park the lid beside the bin so previews don't draw it through the bin floor.
   // Exports re-centre every piece, so this only affects the preview.
   const dx = Math.max(...result.pieces.map((p) => p.max[0])) - Math.min(...lid.pieces.map((p) => p.min[0])) + 15;
-  result.pieces.push(...lid.pieces.map((piece) => ({ ...shift(piece, dx), name: piece.name.replace(lidBase, `${base}-lid`) })));
+  for(const piece of lid.pieces){const mesh={...piece,name:piece.name.replace(lidBase,`${base}-lid`)};result.pieces.push(mesh);result.parts.push({partKey:mesh.name,role:'lid',mesh,quantity:1,displayTransform:{translation:[dx,0,0]},assemblyTransform:{translation:[0,0,L.top]}});}
   result.warnings = [...new Set([...result.warnings, ...lid.warnings])];
   return result;
 }

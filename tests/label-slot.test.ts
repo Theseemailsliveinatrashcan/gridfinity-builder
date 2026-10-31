@@ -1,3 +1,4 @@
+import { displayMeshes } from '../src/geometry/transforms';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { binLayout, buildBin, buildLabelCard, defaultBin, labelCardChannel, labelCardSlots, labelCardSweep } from '../src/geometry/bin';
 import { buildLid, defaultLid } from '../src/geometry/lid';
@@ -154,7 +155,7 @@ describe('label card preview placement', () => {
     const bin = r.pieces[0];
     const cards = r.pieces.filter((p) => p.name.includes('-label-card-'));
     expect(cards.length).toBeGreaterThan(0);
-    for (const c of cards) expect(c.max[1]).toBeLessThan(bin.min[1]);
+    for (const c of displayMeshes(r).filter(p=>p.name.includes('label-card'))) expect(c.max[1]).toBeLessThan(bin.min[1]);
     freeAll();
   });
 });

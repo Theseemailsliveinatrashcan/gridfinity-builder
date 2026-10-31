@@ -114,3 +114,5 @@ main:has(#planner-canvas:not([hidden])) #viewport { top: 40%; }
 .planner-ghost { fill: #44bb6655; stroke: #198038; stroke-width: 1; pointer-events: none; }
 .planner-ghost.invalid { fill: #ff334455; stroke: #a32020; }
 @media(max-width:700px){ main:has(#planner-canvas:not([hidden])) { height: 85vh; } #planner-canvas { min-height: 240px; } main:has(#planner-canvas:not([hidden])) #viewport { top: max(40%, 240px); } }
+
+.spacer-outline {fill:#ffe2ae;stroke:#a36d19;stroke-width:.5;}

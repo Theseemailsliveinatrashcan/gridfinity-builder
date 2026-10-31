@@ -1,3 +1,4 @@
+import { displayMeshes } from '../src/geometry/transforms';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { binLayout, buildBin, defaultBin } from '../src/geometry/bin';
 import { buildDivider, dividerLayout, printableDivider } from '../src/geometry/dividers';
@@ -59,7 +60,7 @@ describe('removable dividers', () => {
     const r = generate({ ...DEFAULTS, bin: p });
     const plates = r.pieces.filter(p => p.name.includes('-divider-'));
     expect(plates.map(p => p.name)).toEqual(['gridfinity-bin-2x2x6-divider-x', 'gridfinity-bin-2x2x6-divider-y']);
-    expect(plates.every(p => p.max[1] < r.pieces[0].min[1])).toBe(true);
+    expect(displayMeshes(r).filter(p=>p.name.includes('-divider-')).every(p => p.max[1] < r.pieces[0].min[1])).toBe(true);
     for (const axis of ['x', 'y'] as const) {
       const flat = printableDivider(p, axis), b = flat.boundingBox();
       expect(flat.status()).toBe('NoError');

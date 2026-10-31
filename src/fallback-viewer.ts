@@ -1,3 +1,4 @@
+import { fallbackAssembly, type AssemblyInstance } from './planner/viewer';
 import type { MeshOut } from './geometry/generate';
 
 const COLORS: [number, number, number][] = [
@@ -32,6 +33,8 @@ export class FallbackViewer {
     });
     new ResizeObserver(() => this.draw()).observe(container);
   }
+
+  showAssembly(instances:AssemblyInstance[]):void {this.show(fallbackAssembly(instances),false);}
 
   show(pieces: MeshOut[], explode: boolean): void {
     this.pieces = pieces;

@@ -1,3 +1,4 @@
+import { instanceGroup, fallbackAssembly, type AssemblyInstance } from './planner/viewer';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { MeshOut } from './geometry/generate';
@@ -49,6 +50,16 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
   }
 
+  showAssembly(instances:AssemblyInstance[]):void {
+    // Reuse framing/grid logic, then replace temporary meshes with shared instances.
+    const pieces=fallbackAssembly(instances);this.show(pieces,false,'drawer-assembly:'+Math.max(0,...pieces.map(piece=>piece.max[2])));
+    const bounds=new THREE.Box3().setFromObject(this.group),centre=bounds.getCenter(new THREE.Vector3());
+    // show() centres world bounds; assembly transforms need the original world centre.
+    const world=new THREE.Box3();for(const instance of instances){const bb=new THREE.Box3(new THREE.Vector3(...instance.mesh.min),new THREE.Vector3(...instance.mesh.max));const m=new THREE.Matrix4().makeRotationZ((instance.transform.rotation??0)*Math.PI/180);m.setPosition(...instance.transform.translation);world.union(bb.applyMatrix4(m));}
+    world.getCenter(centre);centre.z=world.isEmpty()?0:world.min.z;
+    for(const child of [...this.group.children]){const mesh=child as THREE.Mesh;if(mesh instanceof THREE.InstancedMesh)mesh.dispose();mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();this.group.remove(child);}
+    const shared=instanceGroup(instances,[centre.x,centre.y,centre.z]);this.group.add(...[...shared.children]);
+  }
   /** Show pieces, pulled apart slightly so splits are visible. */
   show(pieces: MeshOut[], explode: boolean, frameKey: string): void {
     for (const child of [...this.group.children]) {

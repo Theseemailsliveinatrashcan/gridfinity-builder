@@ -2,12 +2,12 @@ import { SECTIONS } from '../fields';
 import { DEFAULTS } from '../state';
 import type { GenerateRequest } from '../geometry/generate';
 import { mountPartForm } from '../ui/part-form';
-import { defaultPlanner, itemFromRequest, itemRequest, sanitizePlanner, validatePlacement, type PlannerDocument, type PlannerItem } from './document';
+import { defaultPlanner, isBlockingIssue, itemFromRequest, itemRequest, sanitizePlanner, validatePlacement, type PlannerDocument, type PlannerItem } from './document';
 import { footprint, planDrawer } from './layout';
 import { encodePlanner, MAX_INFLATED, parsePlannerJson } from './codec';
 const NS='http://www.w3.org/2000/svg';
 const element=<K extends keyof HTMLElementTagNameMap>(tag:K,text?:string)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
-export interface EditorOptions {document?:PlannerDocument;onPreview:(request:GenerateRequest)=>void;onEmptySelection:()=>void;onDocument?:(document:PlannerDocument)=>void}
+export interface EditorOptions {document?:PlannerDocument;onPreview:(request:GenerateRequest)=>void;onEmptySelection:()=>void;onScene?:(doc:PlannerDocument,selected?:string)=>void;onDocument?:(document:PlannerDocument)=>void}
 export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:EditorOptions):()=>void {
  let doc=structuredClone(options.document??defaultPlanner),selected=doc.items[0]?.id,disposeForm:(()=>void)|undefined,alive=true;
  const errors=element('p');errors.setAttribute('role','status');errors.className='planner-errors';
@@ -19,9 +19,9 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
  function commit(next:PlannerDocument,keepForm=false):boolean {
   const parsed=sanitizePlanner(next);
   if(!parsed.ok){message([...new Set(parsed.issues.map(i=>i.message))].join(' '));return false;}
-  doc=parsed.document;message('');options.onDocument?.(structuredClone(doc));if(keepForm){draw();const item=current();if(item)options.onPreview(itemRequest(item,doc.print));}else render();return true;
+  doc=parsed.document;message('');options.onDocument?.(structuredClone(doc));if(keepForm){draw();const item=current();if(item)options.onPreview(itemRequest(item,doc.print));}else render();if(keepForm)options.onScene?.(doc,selected);return true;
  }
- function update(item:PlannerItem,keepForm=false):boolean {const issues=validatePlacement(doc,item);if(issues.length){message(issues.map(i=>i.message).join(' '));return false;}return commit({...doc,items:doc.items.map(old=>old.id===item.id?item:old)},keepForm);}
+ function update(item:PlannerItem,keepForm=false):boolean {const issues=validatePlacement(doc,item).filter(isBlockingIssue);if(issues.length){message(issues.map(i=>i.message).join(' '));return false;}return commit({...doc,items:doc.items.map(old=>old.id===item.id?item:old)},keepForm);}
  const current=()=>doc.items.find(item=>item.id===selected);
  function button(label:string,action:()=>void){const b=element('button',label);b.type='button';b.onclick=action;toolbar.append(b);return b;}
  function add(kind:'bin'|'holder',source?:PlannerItem){
@@ -31,7 +31,7 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
   item.id=crypto.randomUUID();item.name=source?`${source.name} copy`:kind==='bin'?'Bin':'Holder';
   const L=planDrawer(doc).plateLayout;
   for(let y2=0;y2<L.y.length/21;y2++)for(let x2=0;x2<L.x.length/21;x2++){
-   const candidate={...item,x2,y2};if(!validatePlacement(doc,candidate).length){selected=item.id;commit({...doc,items:[...doc.items,candidate]});return;}
+   const candidate={...item,x2,y2};if(!validatePlacement(doc,candidate).some(isBlockingIssue)){selected=item.id;commit({...doc,items:[...doc.items,candidate]});return;}
   }
   message('No compatible free sockets for this item.');
  }
@@ -52,10 +52,12 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
   number(settings,'Drawer depth (mm)',doc.drawer.depthMm,n=>commit({...doc,drawer:{...doc.drawer,depthMm:n}}));
   number(settings,'Drawer height (mm, 0 = off)',doc.drawer.heightMm??0,n=>commit({...doc,drawer:{...doc.drawer,heightMm:n>0?n:undefined}}));
   number(settings,'Fit gap per side (mm)',doc.drawer.fitGapMm,n=>commit({...doc,drawer:{...doc.drawer,fitGapMm:n}}),0.1);
+  const padding=element('select');padding.setAttribute('aria-label','Baseplate padding');
+  padding.add(new Option('Integral padding','integral',false,doc.baseplate.padding==='integral'));padding.add(new Option('Separate spacer strips','spacers',false,doc.baseplate.padding==='spacers'));padding.onchange=()=>commit({...doc,baseplate:{...doc.baseplate,padding:padding.value as 'integral'|'spacers'}});settings.append(padding);
   const plateForm=element('div');settings.append(plateForm);
   const plateSection=SECTIONS.filter(s=>s.title==='Baseplate').map(s=>({...s,fields:s.fields.filter(f=>['style','magnets','mountHoles','halfCells','alignX','alignY'].includes(f.key))}));
   // Keep the baseplate controls on the same form path as single-part mode.
-  mountPartForm(plateForm,{sections:plateSection,getRequest:()=>({...structuredClone(DEFAULTS),kind:'plate',plate:{...DEFAULTS.plate,...doc.baseplate,drawerW:doc.drawer.widthMm,drawerD:doc.drawer.depthMm}}),commit:req=>commit({...doc,baseplate:{style:req.plate.style,magnets:req.plate.magnets,mountHoles:req.plate.mountHoles,halfCells:req.plate.halfCells,alignX:req.plate.alignX,alignY:req.plate.alignY,padding:'integral'}})});
+  mountPartForm(plateForm,{sections:plateSection,getRequest:()=>({...structuredClone(DEFAULTS),kind:'plate',plate:{...DEFAULTS.plate,...doc.baseplate,drawerW:doc.drawer.widthMm,drawerD:doc.drawer.depthMm}}),commit:req=>commit({...doc,baseplate:{style:req.plate.style,magnets:req.plate.magnets,mountHoles:req.plate.mountHoles,halfCells:req.plate.halfCells,alignX:req.plate.alignX,alignY:req.plate.alignY,padding:doc.baseplate.padding}})});
   const printForm=element('div');settings.append(printForm);
   mountPartForm(printForm,{sections:SECTIONS.filter(s=>s.title==='Print bed'),getRequest:()=>({...structuredClone(DEFAULTS),print:doc.print}),commit:req=>commit({...doc,print:req.print})});
   for(const item of doc.items)list.add(new Option(item.name,item.id,false,item.id===selected));
@@ -67,17 +69,18 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
    number(coords,'X (21 mm ticks)',item.x2,n=>edit({x2:Math.round(n)}));number(coords,'Y (21 mm ticks)',item.y2,n=>edit({y2:Math.round(n)}));
    number(coords,'Width (half units)',item.w2,n=>edit({w2:Math.round(n)}));number(coords,'Depth (half units)',item.d2,n=>edit({d2:Math.round(n)}));
    disposeForm=mountPartForm(details,{getRequest:()=>itemRequest(current()!,doc.print),sections:SECTIONS.filter(s=>s.title!=='Print bed'),commit:req=>{
-    const next=itemFromRequest(current()!,req);const issues=validatePlacement(doc,next);if(issues.length){message(issues.map(i=>i.message).join(' '));return false;}return update(next,next.w2===current()!.w2 && next.d2===current()!.d2);
+    const next=itemFromRequest(current()!,req);const issues=validatePlacement(doc,next).filter(isBlockingIssue);if(issues.length){message(issues.map(i=>i.message).join(' '));return false;}return update(next,next.w2===current()!.w2 && next.d2===current()!.d2);
    }});
    options.onPreview(itemRequest(item,doc.print));
   }else {options.onEmptySelection();message('Add a bin or holder. Select a part to preview it.');}
-  draw();
+  draw();options.onScene?.(doc,selected);
  }
  function draw(){
   svg.replaceChildren();svg.setAttribute('viewBox',`-5 -5 ${doc.drawer.widthMm+10} ${doc.drawer.depthMm+10}`);
   const rect=(x:number,y:number,w:number,h:number,cls:string)=>{const r=document.createElementNS(NS,'rect');for(const [key,value]of Object.entries({x,y,width:w,height:h,class:cls}))r.setAttribute(key,String(value));svg.append(r);return r;};
-  rect(0,0,doc.drawer.widthMm,doc.drawer.depthMm,'drawer-outline');const L=planDrawer(doc),gap=doc.drawer.fitGapMm;
-  rect(gap,gap,L.plateLayout.x.length,L.plateLayout.y.length,'plate-outline');
+  rect(0,0,doc.drawer.widthMm,doc.drawer.depthMm,'drawer-outline');const L=planDrawer(doc);
+  rect(L.plateOrigin[0],L.plateOrigin[1],L.plateLayout.x.length,L.plateLayout.y.length,'plate-outline');
+  for(const strip of L.spacers)rect(strip.x,strip.y,strip.width,strip.depth,'spacer-outline');
   let x=L.gridOrigin[0];for(const w of L.plateLayout.x.cells){let y=L.gridOrigin[1];for(const d of L.plateLayout.y.cells){rect(x,y,w,d,'socket-outline');y+=d;}x+=w;}
   for(const item of doc.items){const f=footprint(item),x=L.gridOrigin[0]+item.x2*21,y=L.gridOrigin[1]+item.y2*21;
    const r=rect(x,y,f.w2*21,f.d2*21,item.id===selected?'planner-item selected':'planner-item');r.setAttribute('aria-label',item.name);r.dataset.id=item.id;
@@ -94,7 +97,7 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
   svg.focus();svg.setPointerCapture(event.pointerId);let ghost:SVGRectElement|undefined,candidate=item;
   const move=(e:PointerEvent)=>{const p=point(e),dx=Math.round((p.x-start.x)/21),dy=Math.round((p.y-start.y)/21);
    candidate=resize?{...initial,w2:initial.w2+(initial.rotation===90?dy:dx),d2:initial.d2+(initial.rotation===90?dx:dy)}:{...initial,x2:initial.x2+dx,y2:initial.y2+dy};
-   ghost?.remove();ghost=document.createElementNS(NS,'rect');const f=footprint(candidate),L=planDrawer(doc);for(const [key,value]of Object.entries({x:L.gridOrigin[0]+candidate.x2*21,y:L.gridOrigin[1]+candidate.y2*21,width:f.w2*21,height:f.d2*21,class:validatePlacement(doc,candidate).length?'planner-ghost invalid':'planner-ghost'}))ghost.setAttribute(key,String(value));svg.append(ghost);
+   ghost?.remove();ghost=document.createElementNS(NS,'rect');const f=footprint(candidate),L=planDrawer(doc);for(const [key,value]of Object.entries({x:L.gridOrigin[0]+candidate.x2*21,y:L.gridOrigin[1]+candidate.y2*21,width:f.w2*21,height:f.d2*21,class:validatePlacement(doc,candidate).some(isBlockingIssue)?'planner-ghost invalid':'planner-ghost'}))ghost.setAttribute(key,String(value));svg.append(ghost);
   };
   const end=(e:PointerEvent)=>{svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',end);svg.removeEventListener('pointercancel',cancel);ghost?.remove();if(svg.hasPointerCapture(e.pointerId))svg.releasePointerCapture(e.pointerId);if(!update(candidate))render();};
   const cancel=()=>{svg.removeEventListener('pointermove',move);svg.removeEventListener('pointerup',end);svg.removeEventListener('pointercancel',cancel);ghost?.remove();render();};

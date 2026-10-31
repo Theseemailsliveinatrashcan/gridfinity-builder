@@ -123,7 +123,9 @@ export function socketCutter(w: number, d: number, cx: number, cy: number, botto
 
 /** Plate spans x in [0, length.x], y in [0, length.y], z in [0, height]. */
 export function buildPlate(p: PlateParams): Manifold {
-  const L = plateLayout(p);
+  return buildPlateFromLayout(plateLayout(p),p);
+}
+export function buildPlateFromLayout(L:PlateLayout,p:PlateParams):Manifold {
   const W = L.x.length;
   const D = L.y.length;
   const plate = prism(roundedRect(W, D, BASEPLATE_OUTER_RADIUS, W / 2, D / 2), 0, L.height);
@@ -164,7 +166,7 @@ export function buildPlate(p: PlateParams): Manifold {
       cutters.push(cut);
     }
   }
-  return subtractAll(plate, [...cutters, ...hardware, ...plateConnectionCutters(p)]);
+  return subtractAll(plate, [...cutters, ...hardware, ...plateConnectionCutters(p,[],[],undefined,L)]);
 }
 
 export function plateHardwareCutters(p: PlateParams, L = plateLayout(p)): Manifold[] {
@@ -208,9 +210,9 @@ function connectionSupports(p: PlateParams, L: PlateLayout): Manifold[] {
   return [...boundaries(L.x).flatMap(x=>L.y.centres.map(y=>box(x-reach,x+reach,y-r,y+r,0,L.bottom))), ...boundaries(L.y).flatMap(y=>L.x.centres.map(x=>box(x-r,x+r,y-reach,y+reach,0,L.bottom)))];
 }
 
-export function plateConnectionCutters(p: PlateParams, xCuts: number[] = [], yCuts: number[] = [], onBlocked?: () => void): Manifold[] {
+export function plateConnectionCutters(p: PlateParams, xCuts: number[] = [], yCuts: number[] = [], onBlocked?: () => void, layout=plateLayout(p)): Manifold[] {
   if (!p.connectScrews) return [];
-  const L=plateLayout(p), z=L.bottom/2, r=CONNECTION_DIAMETER/2;
+  const L=layout, z=L.bottom/2, r=CONNECTION_DIAMETER/2;
   const hardware=unionAll(plateHardwareCutters(p,L));
   const holes: Manifold[]=[];
   if(!L.x.centres.length || !L.y.centres.length) onBlocked?.();

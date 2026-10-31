@@ -2,26 +2,14 @@
 import wasmUrl from 'manifold-3d/manifold.wasm?url';
 import { generate, type GenerateRequest } from './geometry/generate';
 import { freeAll, initKernel } from './geometry/kernel';
-
-const ready = initKernel(() => wasmUrl);
-
-export type WorkerResponse =
-  | { id: number; ok: true; result: ReturnType<typeof generate>; ms: number }
-  | { id: number; ok: false; error: string };
-
-self.onmessage = async (e: MessageEvent<{ id: number; req: GenerateRequest }>) => {
-  const { id, req } = e.data;
-  try {
-    await ready;
-    const t0 = performance.now();
-    const result = generate(req);
-    const ms = performance.now() - t0;
-    const transfer = result.pieces.flatMap((p) => [p.positions.buffer, p.indices.buffer]);
-    (self as unknown as Worker).postMessage({ id, ok: true, result, ms } satisfies WorkerResponse, transfer);
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    (self as unknown as Worker).postMessage({ id, ok: false, error } satisfies WorkerResponse);
-  } finally {
-    freeAll();
-  }
+import type { BatchRequest, BatchReply } from './planner/batch';
+const ready=initKernel(()=>wasmUrl);
+export type WorkerResponse=|{id:number;ok:true;result:ReturnType<typeof generate>;ms:number}|{id:number;ok:false;error:string};
+self.onmessage=async(e:MessageEvent<{id:number;req:GenerateRequest}|BatchRequest>)=>{
+ const data=e.data;const batch='type'in data&&data.type==='generate';
+ try{await ready;const start=performance.now(),result=generate(data.req,batch?data.options:undefined),ms=performance.now()-start;
+ const transfer=[...new Set(result.pieces.flatMap(p=>[p.positions.buffer,p.indices.buffer]))];
+ const reply:WorkerResponse|BatchReply=batch?{type:'result',batchId:data.batchId,jobId:data.jobId,key:data.key,result,ms}:{id:("id" in data?data.id:0),ok:true,result,ms};
+ (self as unknown as Worker).postMessage(reply,transfer);
+ }catch(error){const message=error instanceof Error?error.message:String(error);(self as unknown as Worker).postMessage(batch?{type:'error',batchId:data.batchId,jobId:data.jobId,key:data.key,error:message}:{id:("id" in data?data.id:0),ok:false,error:message});}finally{freeAll();}
 };

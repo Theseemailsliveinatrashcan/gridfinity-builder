@@ -1,3 +1,8 @@
+import { BatchQueue, jobKey } from './planner/batch';
+import { plannerJobs, assemblyInstances, type PlannedJob, type AssemblyInstance } from './planner/viewer';
+import { validatePlacement } from './planner/document';
+import { planDrawer } from './planner/layout';
+import { displayMeshes } from './geometry/transforms';
 import { mountPlanner } from './planner/editor';
 import { decodePlanner } from './planner/codec';
 import type { PlannerDocument } from './planner/document';
@@ -24,7 +29,7 @@ const statusEl = $<HTMLDivElement>('#status');
 const warningsEl = $<HTMLUListElement>('#warnings');
 const downloadsEl = $<HTMLDivElement>('#downloads');
 const viewport = $<HTMLDivElement>('#viewport');
-const viewer: { show(pieces: MeshOut[], explode: boolean, frameKey: string): void } = (() => {
+const viewer: { show(pieces: MeshOut[], explode: boolean, frameKey: string): void;showAssembly(instances:AssemblyInstance[]):void } = (() => {
   try {
     return new Viewer(viewport);
   } catch {
@@ -44,13 +49,13 @@ let watchdog: number | undefined;
 
 function startWorker(): Worker {
   const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-  w.onmessage = e => { if(w===worker)onWorkerMessage(e); };
+  w.onmessage = e => { if(w===worker&&!plannerMode)onWorkerMessage(e); };
   w.onerror = (e) => {
     e.preventDefault();
-    if(w!==worker)return;
+    if(w!==worker||plannerMode)return;
     restartWorker('The geometry engine crashed. Try a smaller part.');
   };
-  w.onmessageerror = () => {if(w===worker)restartWorker('Could not read the result from the geometry engine.');};
+  w.onmessageerror = () => {if(w===worker&&!plannerMode)restartWorker('Could not read the result from the geometry engine.');};
   return w;
 }
 
@@ -90,6 +95,7 @@ function onWorkerMessage(e: MessageEvent<WorkerResponse>): void {
 }
 
 function run(): void {
+  if(plannerMode)return;
   if (busy) {
     pending = true;
     return;
@@ -107,6 +113,24 @@ function run(): void {
 let timer: number | undefined;
 let plannerMode=false,disposePlanner:(()=>void)|undefined;
 let plannerDocument=initialPlanner;
+const plannerBatch=new BatchQueue();
+let sceneJobs:PlannedJob[]=[],sceneDocument:PlannerDocument|undefined,sceneSelected:string|undefined,showAccessories=false;
+let sceneTimer:number|undefined,sceneErrors:string[]=[],sceneProgress='';
+function drawPlannerScene(){
+  if(!plannerMode||!sceneDocument)return;
+  const instances=assemblyInstances(sceneDocument,sceneJobs,plannerBatch.cache,sceneSelected,showAccessories);
+  viewer.showAssembly(instances);lastResult=undefined;downloadsEl.replaceChildren();
+  statusEl.textContent=sceneProgress+` · ${sceneDocument.items.length} items · ${instances.filter(i=>i.proxy).length} footprint proxies`;
+  warningsEl.replaceChildren();for(const issue of [...planDrawer(sceneDocument).issues,...sceneDocument.items.flatMap(item=>validatePlacement(sceneDocument!,item))]){const li=document.createElement('li');li.textContent=issue.message;warningsEl.append(li);}
+  for(const error of sceneErrors){const li=document.createElement('li');li.textContent=error;warningsEl.append(li);}
+  const cancel=document.createElement('button');cancel.textContent='Cancel generation';cancel.onclick=()=>{clearTimeout(sceneTimer);plannerBatch.cancel();sceneProgress='Drawer preview cancelled';drawPlannerScene();};downloadsEl.append(cancel);
+  const retry=document.createElement('button');retry.textContent='Regenerate preview';retry.onclick=()=>queuePlannerScene(sceneDocument!,sceneSelected);downloadsEl.append(retry);
+  const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=showAccessories;toggle.onchange=()=>{showAccessories=toggle.checked;drawPlannerScene();};label.append(toggle,document.createTextNode(' Show loose accessories'));downloadsEl.append(label);
+}
+function queuePlannerScene(doc:PlannerDocument,selected?:string){
+  plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=doc;sceneSelected=selected;sceneJobs=plannerJobs(doc);plannerBatch.cache.pin(sceneJobs.find(job=>job.id===selected)?jobKey(sceneJobs.find(job=>job.id===selected)!.job):undefined);sceneErrors=[];sceneProgress='Preparing drawer preview';drawPlannerScene();
+  sceneTimer=window.setTimeout(()=>plannerBatch.start([...sceneJobs].sort((a,b)=>Number(b.id===sceneSelected)-Number(a.id===sceneSelected)).map(job=>job.job),{progress:(done,total)=>{sceneProgress=`Drawer preview ${done}/${total}`;},updated:drawPlannerScene,error:(_key,error)=>{sceneErrors.push(error);}}),180);
+}
 let singleState=structuredClone(state);
 /** fromInput: the change came from a form control that already shows the new value. */
 function changed(fromInput = false): void {
@@ -135,22 +159,23 @@ for (const tab of document.querySelectorAll<HTMLButtonElement>('.kinds button'))
   };
 }
 function clearPlannerPreview():void {
+  plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=undefined;
   clearTimeout(timer);timer=undefined;clearTimeout(watchdog);watchdog=undefined;
   requestId++;pending=false;
-  if(busy){worker.terminate();worker=startWorker();busy=false;}
+  if(busy){worker.terminate();if(!plannerMode)worker=startWorker();busy=false;}
   lastResult=undefined;viewer.show([],false,'planner-empty');
   statusEl.textContent='Select a planner item to preview.';warningsEl.replaceChildren();downloadsEl.replaceChildren();
 }
 function leavePlanner(){
-  if(!plannerMode)return;disposePlanner?.();disposePlanner=undefined;plannerMode=false;state=structuredClone(singleState);
+  if(!plannerMode)return;plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=undefined;disposePlanner?.();disposePlanner=undefined;plannerMode=false;worker=startWorker();state=structuredClone(singleState);
   $('#planner-canvas').hidden=true;form.hidden=false;$('#planner-panel').hidden=true;$('#reset').hidden=false;
   $('#planner-mode').classList.remove('active');
 }
 $<HTMLButtonElement>('#planner-mode').onclick=()=>{
   if(plannerMode)return;
-  singleState=structuredClone(state);plannerMode=true;disposeForm?.();clearPlannerPreview();form.hidden=true;$('#reset').hidden=true;$('#planner-panel').hidden=false;$('#planner-canvas').hidden=false;
+  singleState=structuredClone(state);plannerMode=true;disposeForm?.();clearPlannerPreview();worker.terminate();form.hidden=true;$('#reset').hidden=true;$('#planner-panel').hidden=false;$('#planner-canvas').hidden=false;
   document.querySelectorAll('.kinds button').forEach(tab=>tab.classList.remove('active'));$('#planner-mode').classList.add('active');
-  disposePlanner=mountPlanner($('#planner-panel'),$('#planner-canvas'),{document:plannerDocument,onEmptySelection:clearPlannerPreview,onDocument:doc=>{plannerDocument=doc;},onPreview:req=>{state=req;clearTimeout(timer);timer=window.setTimeout(run,180);}});
+  disposePlanner=mountPlanner($('#planner-panel'),$('#planner-canvas'),{document:plannerDocument,onEmptySelection:clearPlannerPreview,onDocument:doc=>{plannerDocument=doc;},onPreview:()=>{},onScene:queuePlannerScene});
 };
 $<HTMLButtonElement>('#reset').onclick = () => {
   const kind = state.kind;
@@ -229,7 +254,7 @@ function download(name: string, data: Uint8Array, type: string): void {
 function showResult(r: GenerateResult, ms: number): void {
   const fresh = lastResult?.r !== r;
   lastResult = { r, ms };
-  if (fresh) viewer.show(r.pieces, true, `${state.kind}`);
+  if (fresh) viewer.show(displayMeshes(r), true, `${state.kind}`);
   const [x, y, z] = r.size;
   const n = r.pieces.length;
   statusEl.textContent = `${mm(x)} × ${mm(y)} × ${mm(z)} mm · ${n} piece${n === 1 ? '' : 's'} · ${Math.round(ms)} ms`;

@@ -21,11 +21,11 @@ describe('planner document and placement',()=>{
   const item=bin();const parsed=sanitizePlanner({...doc(),drawer:{widthMm:1e9,depthMm:200,fitGapMm:-1},items:[{...item,x2:0.1,w2:2.1,params:{...item.params,width:99,evil:true}}]});
   expect(parsed.ok).toBe(true);if(!parsed.ok)return;expect(parsed.document.drawer.widthMm).toBe(2000);expect(parsed.document.items[0].w2).toBe(2);expect(parsed.document.items[0].params).not.toHaveProperty('width');expect(parsed.document.items[0].params).not.toHaveProperty('evil');
  });
- it('rejects versions, duplicate IDs, too many items and Patch B padding',()=>{
+ it('rejects versions, duplicate IDs, too many items and unknown padding',()=>{
   expect(sanitizePlanner({...doc(),version:2}).ok).toBe(false);
   expect(sanitizePlanner({...doc(),items:[bin(),bin()]}).ok).toBe(false);
   expect(sanitizePlanner({...doc(),items:Array.from({length:65},(_,i)=>bin(String(i)))}).ok).toBe(false);
-  expect(sanitizePlanner({...doc(),baseplate:{...doc().baseplate,padding:'spacers'}}).ok).toBe(false);
+  expect(sanitizePlanner({...doc(),baseplate:{...doc().baseplate,padding:'other'}}).ok).toBe(false);
  });
  it('allows touching half-open boundaries and rejects overlapping, negative or outside items',()=>{
   const d=doc();d.items=[bin()];expect(validatePlacement(d,bin('b',2)).length).toBe(0);

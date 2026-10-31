@@ -1,3 +1,4 @@
+import { displayMeshes } from '../src/geometry/transforms';
 import type { Manifold } from 'manifold-3d';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { binLayout, buildBin, defaultBin } from '../src/geometry/bin';
@@ -122,7 +123,8 @@ describe('review regressions', () => {
     const r = generate({ ...DEFAULTS, bin: { ...DEFAULTS.bin, withLid: true } });
     const [bin, lid] = r.pieces;
     expect(lid.name.endsWith('-lid')).toBe(true);
-    expect(lid.min[0]).toBeGreaterThan(bin.max[0]);
+    const displayed=displayMeshes(r);
+    expect(displayed.find(p=>p.name===lid.name)!.min[0]).toBeGreaterThan(bin.max[0]);
     freeAll();
   });
 });
