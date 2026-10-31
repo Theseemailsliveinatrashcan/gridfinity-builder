@@ -62,3 +62,10 @@ export const BASEPLATE_SCREW_COUNTERBORE_RADIUS = 5.5 / 2;
 export const BASEPLATE_SCREW_COUNTERBORE_HEIGHT = 3;
 // 3 mm head recess with 0.6 mm of material beneath its shoulder.
 export const MOUNT_BOTTOM = BASEPLATE_SCREW_COUNTERBORE_HEIGHT + 0.6;
+
+export const MAGNET_CRUSH_INNER_RADIUS = 5.9 / 2;
+export const MAGNET_CRUSH_RIBS = 8;
+export const MAGNET_CHAMFER = 0.8;
+export const REFINED_RADIUS = 5.86 / 2;
+export const REFINED_HEIGHT = 1.9;
+export const REFINED_BOTTOM = 0.4;

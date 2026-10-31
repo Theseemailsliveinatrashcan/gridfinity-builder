@@ -1,10 +1,11 @@
+import { type MagnetOptions } from './magnets';
 import type { CrossSection, Manifold, Vec2 } from 'manifold-3d';
 import { binLayout, buildBin, defaultBin, type BinParams, type LipStyle } from './bin';
 import { BASE_PROFILE_HEIGHT, BASE_TOP_RADIUS, HEIGHT_UNIT, SCREW_DEPTH } from './constants';
 import { k, loft, prism, roundedRect, subtractAll } from './kernel';
 
 export type HolderPreset = 'aa' | 'aaa' | '18650' | '21700' | 'cr2032' | 'hex14' | 'hex4' | 'sd' | 'microsd' | 'pen' | 'marker' | 'socket14' | 'socket38' | 'custom';
-export interface HolderParams {
+export interface HolderParams extends MagnetOptions {
   width: number;
   depth: number;
   lip: LipStyle;
@@ -49,7 +50,7 @@ export function presetValues(preset: HolderPreset): Partial<HolderParams> {
 }
 
 export const defaultHolder: HolderParams = {
-  width: 2, depth: 2, lip: 'normal', magnets: false, screws: false,
+  width: 2, depth: 2, lip: 'normal', magnets: false, magnetStyle: 'plain', magnetChamfer: false, screws: false,
   heightMode: 'auto', height: 4, preset: 'custom', shape: 'round', size: 15.1,
   slotThickness: 2.4, pocketDepth: 13, clearance: 0.25, spacing: 2, margin: 3,
   layout: 'grid', hexPointForward: false, slotLean: 0, fingerNotch: false,
@@ -64,7 +65,7 @@ function validate(p: HolderParams): void {
 
 export function holderBinParams(p: HolderParams): BinParams {
   validate(p);
-  const base = { ...defaultBin, width: p.width, depth: p.depth, lip: p.lip, magnets: p.magnets, screws: p.screws, heightMode: 'units' as const };
+  const base = { ...defaultBin, width: p.width, depth: p.depth, lip: p.lip, magnets: p.magnets, magnetStyle: p.magnetStyle, magnetChamfer: p.magnetChamfer, screws: p.screws, heightMode: 'units' as const };
   const L = binLayout(base);
   const support = L.top - L.interiorTop;
   // Keep a roof over the standard screw bores as well as the 1.2 mm pocket floor.

@@ -99,6 +99,8 @@ export const SECTIONS: Section[] = [
     kinds: ['bin'],
     fields: [
       bin({ key: 'magnets', label: 'Magnet holes (6 × 2 mm)', kind: 'toggle', show: s => !s.bin.vase }),
+      bin({ key: 'magnetStyle', label: 'Magnet pocket style', kind: 'select', options: [['plain', 'Plain'], ['crush', 'Crush ribs'], ['refined', 'Refined (side-loaded)']], show: s => s.bin.magnets && !s.bin.vase }),
+      bin({ key: 'magnetChamfer', label: 'Magnet entry chamfer', kind: 'toggle', show: s => s.bin.magnets && s.bin.magnetStyle !== 'refined' && !s.bin.vase }),
       bin({ key: 'screws', label: 'Screw holes (M3)', kind: 'toggle', show: s => !s.bin.vase }),
       bin({ key: 'cornerHolesOnly', label: 'Outer corners only', kind: 'toggle', show: (s) => !s.bin.vase && (s.bin.magnets || s.bin.screws) }),
     ],
@@ -112,6 +114,8 @@ export const SECTIONS: Section[] = [
       lid({ key: 'style', label: 'Top style', kind: 'select', options: [['flat', 'Flat'], ['stackable', 'Stackable (baseplate sockets)']] }),
       lid({ key: 'handle', label: 'Finger recess', kind: 'toggle', help: 'Shallow recess in the first cell.' }),
       lid({ key: 'magnets', label: 'Underside magnet holes (6 × 2 mm)', kind: 'toggle', help: 'Whole cells only, matching bin magnet locations.' }),
+      lid({ key: 'magnetStyle', label: 'Magnet pocket style', kind: 'select', options: [['plain', 'Plain'], ['crush', 'Crush ribs'], ['refined', 'Refined (side-loaded)']], show: s => s.lid.magnets }),
+      lid({ key: 'magnetChamfer', label: 'Magnet entry chamfer', kind: 'toggle', show: s => s.lid.magnets && s.lid.magnetStyle !== 'refined' }),
     ],
   },
   {
@@ -124,6 +128,8 @@ export const SECTIONS: Section[] = [
       holder({ key: 'height', label: 'Manual height', kind: 'number', min: 1, max: 24, step: 1, unit: '× 7 mm', show: s => s.holder.heightMode === 'units' }),
       holder({ key: 'lip', label: 'Stacking lip', kind: 'select', options: [['normal', 'Standard'], ['none', 'None']] }),
       holder({ key: 'magnets', label: 'Magnet holes', kind: 'toggle' }),
+      holder({ key: 'magnetStyle', label: 'Magnet pocket style', kind: 'select', options: [['plain', 'Plain'], ['crush', 'Crush ribs'], ['refined', 'Refined (side-loaded)']], show: s => s.holder.magnets }),
+      holder({ key: 'magnetChamfer', label: 'Magnet entry chamfer', kind: 'toggle', show: s => s.holder.magnets && s.holder.magnetStyle !== 'refined' }),
       holder({ key: 'screws', label: 'Screw holes (M3)', kind: 'toggle' }),
     ],
   },
@@ -159,6 +165,8 @@ export const SECTIONS: Section[] = [
       plate({ key: 'style', label: 'Style', kind: 'select', options: [['thin', 'Thin (open frame)'], ['solid', 'Solid bottom'], ['weighted', 'Weighted']] }),
       plate({ key: 'mountHoles', label: 'Screw-down holes', kind: 'select', options: [['none', 'None'], ['countersink', 'Countersunk (Ø3 bore, Ø8 head)'], ['counterbore', 'Counterbored (Ø3 bore, Ø5.5 head)']], help: 'Adds a 3.6 mm bottom to thin plates (0.6 mm beneath a 3 mm head recess). Weighted plates skip screw holes to preserve weight pockets.' }),
       plate({ key: 'magnets', label: 'Magnet holes (6 × 2 mm)', kind: 'toggle', help: 'Adds a bottom layer to thin plates.' }),
+      plate({ key: 'magnetStyle', label: 'Magnet pocket style', kind: 'select', options: [['plain', 'Plain'], ['crush', 'Crush ribs']], show: s => s.plate.magnets }),
+      plate({ key: 'magnetChamfer', label: 'Magnet entry chamfer', kind: 'toggle', show: s => s.plate.magnets }),
     ],
   },
   {

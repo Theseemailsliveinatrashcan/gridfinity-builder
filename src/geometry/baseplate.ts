@@ -1,3 +1,4 @@
+import { magnetCutter } from './magnets';
 import type { Manifold } from 'manifold-3d';
 import {
   BASEPLATE_HEIGHT,
@@ -10,8 +11,6 @@ import {
   BASEPLATE_PROFILE,
   GRID,
   HOLE_OFFSET,
-  MAGNET_DEPTH,
-  MAGNET_DIAMETER,
   SOLID_BOTTOM,
   WEIGHTED_BOTTOM,
   WEIGHT_POCKET_DEPTH,
@@ -26,6 +25,8 @@ export interface PlateParams {
   depth: number;
   style: PlateStyle;
   magnets: boolean;
+  magnetStyle: 'plain' | 'crush';
+  magnetChamfer: boolean;
   halfCells: boolean;
   mountHoles: 'none' | 'countersink' | 'counterbore';
   /** Drawer interior size in mm; 0 means "use width/depth in units". */
@@ -40,7 +41,7 @@ export const defaultPlate: PlateParams = {
   width: 3,
   depth: 3,
   style: 'thin',
-  magnets: false,
+  magnets: false, magnetStyle: 'plain', magnetChamfer: false,
   halfCells: false,
   mountHoles: 'none',
   drawerW: 0,
@@ -143,7 +144,7 @@ export function plateHardwareCutters(p: PlateParams, L = plateLayout(p)): Manifo
       for (const sx of [-1, 1]) {
         for (const sy of [-1, 1]) {
           cutters.push(
-            cylinderAt(cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, L.bottom - MAGNET_DEPTH, L.bottom + 0.01, MAGNET_DIAMETER / 2),
+            magnetCutter(p.magnetStyle, p.magnetChamfer).mirror([0, 0, 1]).translate([cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, L.bottom]),
           );
         }
       }

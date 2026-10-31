@@ -1,10 +1,11 @@
+import { magnetCutter, type MagnetOptions } from './magnets';
 import type { Manifold } from 'manifold-3d';
 import { cellCentres, cellPitches } from './bin';
 import { socketCutter } from './baseplate';
-import { BASE_PROFILE, BASE_PROFILE_HEIGHT, BASE_TOP_RADIUS, BASE_TOP_SIZE_GAP, BASEPLATE_HEIGHT, GRID, HOLE_OFFSET, MAGNET_DEPTH, MAGNET_DIAMETER } from './constants';
-import { cylinderAt, k, prism, roundedLoft, roundedRect, subtractAll } from './kernel';
+import { BASE_PROFILE, BASE_PROFILE_HEIGHT, BASE_TOP_RADIUS, BASE_TOP_SIZE_GAP, BASEPLATE_HEIGHT, GRID, HOLE_OFFSET } from './constants';
+import { k, prism, roundedLoft, roundedRect, subtractAll } from './kernel';
 
-export interface LidParams {
+export interface LidParams extends MagnetOptions {
   width: number;
   depth: number;
   style: 'flat' | 'stackable';
@@ -13,7 +14,7 @@ export interface LidParams {
 }
 
 export const defaultLid: LidParams = {
-  width: 2, depth: 1, style: 'flat', handle: false, magnets: false,
+  width: 2, depth: 1, style: 'flat', handle: false, magnets: false, magnetStyle: 'plain', magnetChamfer: false,
 };
 
 export function buildLid(p: LidParams): Manifold {
@@ -35,7 +36,7 @@ export function buildLid(p: LidParams): Manifold {
     if (p.style === 'stackable') cuts.push(socketCutter(xs[i], ys[j], cx, cy, floorTop));
     if (p.magnets && xs[i] === GRID && ys[j] === GRID) {
       for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-        cuts.push(cylinderAt(cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, -1, MAGNET_DEPTH, MAGNET_DIAMETER / 2));
+        cuts.push(magnetCutter(p.magnetStyle, p.magnetChamfer).rotate([0, 0, sx < 0 ? 180 : 0]).translate([cx + sx * HOLE_OFFSET, cy + sy * HOLE_OFFSET, 0]));
       }
     }
   }));

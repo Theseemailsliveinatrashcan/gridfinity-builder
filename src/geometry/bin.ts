@@ -1,3 +1,4 @@
+import { magnetCutter, type MagnetOptions } from './magnets';
 import { addCullenectSockets } from './cullenect';
 import { addDividerRails } from './dividers';
 import type { Manifold, Vec2 } from 'manifold-3d';
@@ -14,8 +15,6 @@ import {
   LIP_HEIGHT,
   LIP_SUPPORT_HEIGHT,
   LIP_TIP_TRIM,
-  MAGNET_DEPTH,
-  MAGNET_DIAMETER,
   SCREW_DEPTH,
   SCREW_DIAMETER,
   TAB_ANGLE_DEG,
@@ -39,7 +38,7 @@ export type LipStyle = 'normal' | 'none';
 export type HeightMode = 'units' | 'internal';
 export type TabStyle = 'none' | 'full' | 'left' | 'center' | 'right';
 
-export interface BinParams {
+export interface BinParams extends MagnetOptions {
   /** Width / depth in grid units (multiples of 0.5). */
   width: number;
   depth: number;
@@ -106,7 +105,7 @@ export const defaultBin: BinParams = {
   slotPitch: 5,
   slotWidth: 2.5,
   dividerThickness: 2.2,
-  magnets: false,
+  magnets: false, magnetStyle: 'plain', magnetChamfer: false,
   screws: false,
   cornerHolesOnly: false,
 };
@@ -426,7 +425,7 @@ export function buildBin(p: BinParams): Manifold {
   if (cavity) cutters.push(cavity);
   const holes = holeCentres(p);
   for (const [x, y] of holes) {
-    if (p.magnets) cutters.push(cylinderAt(x, y, -1, MAGNET_DEPTH, MAGNET_DIAMETER / 2));
+    if (p.magnets) cutters.push(magnetCutter(p.magnetStyle, p.magnetChamfer).rotate([0, 0, x < cellCentres(cellPitches(p.width)).reduce((a, b) => Math.abs(x - a) < Math.abs(x - b) ? a : b) ? 180 : 0]).translate([x, y, 0]));
     if (p.screws) {
       const depth = Math.min(SCREW_DEPTH, L.floorZ - 0.6);
       cutters.push(cylinderAt(x, y, -1, depth, SCREW_DIAMETER / 2, 20));

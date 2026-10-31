@@ -327,7 +327,7 @@ export function generate(req: GenerateRequest): GenerateResult {
     return result;
   }
   const lid = generatePart({ ...req, kind: 'lid', lid: {
-    ...defaultLid, width: req.bin.width, depth: req.bin.depth, magnets: req.bin.magnets, style: req.bin.lidStyle, handle: req.bin.lidGrip,
+    ...defaultLid, width: req.bin.width, depth: req.bin.depth, magnets: req.bin.magnets, magnetStyle: req.bin.magnetStyle, magnetChamfer: req.bin.magnetChamfer, style: req.bin.lidStyle, handle: req.bin.lidGrip,
   } });
   const lidBase = `gridfinity-lid-${req.bin.width}x${req.bin.depth}`;
   // Park the lid beside the bin so previews don't draw it through the bin floor.
