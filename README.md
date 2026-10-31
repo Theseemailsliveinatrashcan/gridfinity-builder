@@ -11,6 +11,7 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 - Standard stacking lip or flat top, wall and floor thickness
 - Compartments in both directions, label tabs (full, left, center, right), finger scoops
 - Solid bins, magnet holes (6 × 2 mm), M3 screw holes, holes at outer corners only
+- Plain or eight-rib press-fit magnet holes (5.9 mm inner diameter), optional 0.8 mm entry chamfer, or refined side-loaded pockets (5.86 × 1.9 mm, 0.4 mm bottom). Lids and holders share these options; half cells skip magnets.
 - Scoops on the front wall only, or on all four sides for trays
 - Optionally download a matching lid: flat, or stackable (baseplate sockets on top so boxes stack), with an optional finger recess
 - Removable dividers: slotted inner walls plus printable divider plates; plates both ways cross with egg-crate notches at marked positions
@@ -30,7 +31,9 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 
 **Baseplates**
 - Size in units, or fit a drawer in mm with adjustable padding position
-- Thin (open frame), solid bottom, or weighted styles; magnet holes
+- Thin (open frame), solid bottom, weighted or skeletonized styles; plain/crush-rib magnet pockets with optional chamfer
+- Screw-together edges: rebuilt-style Ø3.35 mm M3 / 4-40 bores in a 6.75 mm skeletonized bottom, including aligned split seams. This overrides the selected bottom style; use short screws accessible through the cut-outs. Bores blocked by hardware are skipped with a warning.
+- Skeletonized cut-outs retain corner magnet pads; our centre mounting bosses get narrow bridges to stay attached. Half cells omit corner pads and keep their mounting bosses.
 - Screw-down holes (M3, countersunk or counterbored) to fix a plate into a drawer
 - Half-cell fill: when fitting a drawer leaves 21 mm or more, add a row of half-width sockets for half-unit bins
 
@@ -39,7 +42,7 @@ Design Gridfinity bins and baseplates in the browser, split large parts to fit y
 
 **Split to fit your print bed**
 - Cuts only along grid lines, into the fewest and most even pieces (a 7-unit plate on a 5-unit bed becomes 4 + 3, not 5 + 2)
-- Baseplates join with dovetails in the bottom layer, with an adjustable fit gap (default 0.2 mm per side)
+- Solid/weighted baseplates join with dovetails in the bottom layer, with an adjustable fit gap (default 0.2 mm per side). Skeletonized plates use flat seams; enable screw-together edges for horizontal screw joints. Screw joints override dovetails.
 - Bins and flat lids get dovetails in the floor layer that drop in from above; they move or skip spots blocked by dividers, scoops or label tabs, and fall back to flat (glued) seams when there is no room
 - Each piece downloads as its own STL or 3MF, or all together (.zip of STLs, or one 3MF with every piece)
 

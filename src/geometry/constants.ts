@@ -69,3 +69,9 @@ export const MAGNET_CHAMFER = 0.8;
 export const REFINED_RADIUS = 5.86 / 2;
 export const REFINED_HEIGHT = 1.9;
 export const REFINED_BOTTOM = 0.4;
+
+export const SKELETON_RADIUS = 2;
+export const SKELETON_MIN_BOTTOM = 1;
+export const CONNECTION_DIAMETER = 3.35;
+export const CONNECTION_BOTTOM = 6.75;
+export const CONNECTION_REACH = GRID / 4;

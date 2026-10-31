@@ -2,7 +2,7 @@ import { dividerLayout, printableDivider } from './dividers';
 import { unionAll } from './kernel';
 import type { Manifold, Vec3 } from 'manifold-3d';
 import { binLayout, vaseBinParams, vasePrintStats, buildBin, buildLabelCard, labelCardSlots, cellPitches, validateBin, type BinParams } from './bin';
-import { buildPlate, plateLayout, plateHardwareCutters, type PlateParams } from './baseplate';
+import { buildPlate, plateLayout, plateHardwareCutters, plateConnectionCutters, type PlateParams } from './baseplate';
 import { buildSpacer, spacerCells, type SpacerParams } from './spacer';
 import { buildHolder, holderLayout, type HolderParams } from './holder';
 import { buildLid, defaultLid, type LidParams } from './lid';
@@ -137,7 +137,7 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
     const p = req.plate;
     const L = plateLayout(p);
     let connector: Connector | undefined;
-    if (req.print.split && req.print.connector === 'dovetail') {
+    if (req.print.split && req.print.connector === 'dovetail' && !p.connectScrews && p.style !== 'skeletonized') {
       if (L.bottom > 0) {
         const hardware = unionAll(plateHardwareCutters(p, L));
         connector = {
@@ -158,6 +158,12 @@ function build(req: GenerateRequest): { part: Manifold; x: AxisSpec; y: AxisSpec
       } else {
         warnings.push('Thin plates have no bottom layer for dovetails, so pieces butt together flat. Choose a solid or weighted plate for dovetail joints.');
       }
+    }
+    if(p.style === 'skeletonized' && !p.connectScrews && req.print.split && req.print.connector === 'dovetail') warnings.push('Skeletonized plates use flat seams; enable screw-together edges to join them.');
+    if(p.connectScrews) {
+      if(p.style !== 'skeletonized') warnings.push('Screw-together edges use a skeletonized bottom instead of the selected bottom style.');
+      if(req.print.split && req.print.connector==='dovetail') warnings.push('Screw-together plates use flat screw joints instead of dovetails.');
+      plateConnectionCutters(p, [], [], () => { if(!warnings.includes('Some screw-together holes were skipped to avoid hardware or narrow edges.')) warnings.push('Some screw-together holes were skipped to avoid hardware or narrow edges.'); });
     }
     const axis = (a: typeof L.x): AxisSpec => a.cells.length
       ? { cells: a.cells, padStart: a.padStart, padEnd: a.padEnd, origin: a.padStart }
@@ -218,7 +224,8 @@ function floorConnector(part: Manifold, x: AxisSpec, y: AxisSpec, floorZ: number
 }
 
 function generatePart(req: GenerateRequest): GenerateResult {
-  const { part, x, y, connector: plateConnector, base, warnings, info = [] } = build(req);
+  const { part: initialPart, x, y, connector: plateConnector, base, warnings, info = [] } = build(req);
+  let part = initialPart;
   let connector = plateConnector;
   let placed = false;
   let missing = false;
@@ -257,6 +264,10 @@ function generatePart(req: GenerateRequest): GenerateResult {
     if (!plan) {
       warnings.push('A single grid cell is larger than the print bed, so the part cannot be split to fit.');
     } else if (plan.xCuts.length || plan.yCuts.length) {
+      if(req.kind==='plate' && req.plate.connectScrews) {
+        const holes=unionAll(plateConnectionCutters(req.plate,plan.xCuts,plan.yCuts,()=>{ if(!warnings.includes('Some screw-together holes were skipped to avoid hardware or narrow edges.')) warnings.push('Some screw-together holes were skipped to avoid hardware or narrow edges.'); }));
+        if(holes) part=part.subtract(holes);
+      }
       let split = splitPart(part, plan, connector);
       if (connector && !placed) {
         connector = undefined;
