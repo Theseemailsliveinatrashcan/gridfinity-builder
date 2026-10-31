@@ -1,9 +1,32 @@
-import type { GeneratedPart, MeshOut, PartTransform, GenerateResult } from './generate';
-export function transformMesh(mesh:MeshOut,t?:PartTransform):MeshOut {
- if(!t)return mesh;
- const angle=(t.rotation??0)*Math.PI/180,c=Math.cos(angle),s=Math.sin(angle),p=mesh.positions,positions=new Float32Array(p.length);
- const min:[number,number,number]=[Infinity,Infinity,Infinity],max:[number,number,number]=[-Infinity,-Infinity,-Infinity];
- for(let i=0;i<p.length;i+=3){const v=[p[i]*c-p[i+1]*s+t.translation[0],p[i]*s+p[i+1]*c+t.translation[1],p[i+2]+t.translation[2]];for(let axis=0;axis<3;axis++){positions[i+axis]=v[axis];min[axis]=Math.min(min[axis],v[axis]);max[axis]=Math.max(max[axis],v[axis]);}}
- return {...mesh,positions,min,max};
+import type { MeshOut, PartTransform, GenerateResult } from './generate';
+
+export function transformMesh(mesh: MeshOut, transform?: PartTransform): MeshOut {
+  if (!transform) return mesh;
+
+  const angle = (transform.rotation ?? 0) * Math.PI / 180;
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  const source = mesh.positions;
+  const positions = new Float32Array(source.length);
+  const min: [number, number, number] = [Infinity, Infinity, Infinity];
+  const max: [number, number, number] = [-Infinity, -Infinity, -Infinity];
+
+  for (let i = 0; i < source.length; i += 3) {
+    const vertex = [
+      source[i] * cosine - source[i + 1] * sine + transform.translation[0],
+      source[i] * sine + source[i + 1] * cosine + transform.translation[1],
+      source[i + 2] + transform.translation[2],
+    ];
+    for (let axis = 0; axis < 3; axis++) {
+      positions[i + axis] = vertex[axis];
+      min[axis] = Math.min(min[axis], vertex[axis]);
+      max[axis] = Math.max(max[axis], vertex[axis]);
+    }
+  }
+  return { ...mesh, positions, min, max };
 }
-export function displayMeshes(result:GenerateResult):MeshOut[]{return result.parts?.length?result.parts.map((part:GeneratedPart)=>transformMesh(part.mesh,part.displayTransform)):result.pieces;}
+
+export function displayMeshes(result: GenerateResult): MeshOut[] {
+  if (!result.parts?.length) return result.pieces;
+  return result.parts.map(part => transformMesh(part.mesh, part.displayTransform));
+}

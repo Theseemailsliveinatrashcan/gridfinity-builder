@@ -21,5 +21,8 @@ export function planDrawer(doc:PlannerDocument) {
 }
 export function footprint(item:PlannerItem) {return item.rotation===90?{w2:item.d2,d2:item.w2}:{w2:item.w2,d2:item.d2};}
 export function socketRun(cells:number[],start2:number,size2:number,required=cellPitches(size2/2)):boolean {let start=0;for(let i=0;i<cells.length;i++){if(Math.abs(start-start2*21)<1e-6)return required.every((pitch,j)=>cells[i+j]===pitch);start+=cells[i];}return false;}
-/** Standard socket seats a foot at the socket floor (not at the 5 mm rim). */
-export function seatingOffset(bottom:number):number{return bottom;}
+/** Multiple feet need clearance above the socket ridges, including half-cell feet. */
+export function seatingOffset(bottom: number, width: number, depth: number): number {
+  const feet = cellPitches(width).length * cellPitches(depth).length;
+  return bottom + (feet > 1 ? 0.25 : 0);
+}

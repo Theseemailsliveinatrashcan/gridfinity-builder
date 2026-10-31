@@ -4,7 +4,7 @@ import { holderBinParams, type HolderParams } from '../geometry/holder';
 import { dividerLayout } from '../geometry/dividers';
 import type { PlateParams } from '../geometry/baseplate';
 import type { GenerateRequest, PrintSettings } from '../geometry/generate';
-import { footprint, planDrawer, socketRun } from './layout';
+import { footprint, planDrawer, seatingOffset, socketRun } from './layout';
 export interface Issue {code:string;message:string;itemId?:string}
 type ItemBase={id:string;name:string;x2:number;y2:number;w2:number;d2:number;rotation:0|90};
 export type PlannerItem=ItemBase & ({kind:'bin';params:Omit<BinParams,'width'|'depth'>}|{kind:'holder';params:Omit<HolderParams,'width'|'depth'>});
@@ -40,7 +40,7 @@ export function validatePlacement(doc:PlannerDocument,candidate:PlannerItem):Iss
     if(!p.vase&&p.labelSlot==='cullenect'&&compW<17)add('parameters','Compartments too narrow for Cullenect labels.');
     let top=p.withLid&&p.lip==='normal'?layout.top+(p.lidStyle==='stackable'?12:7):layout.top+(p.lip==='normal'?3.8:0);
     if(p.labelSlot==='card'&&!p.solid&&!p.vase)top=Math.max(top,layout.floorZ+12.8);
-    if(doc.drawer.heightMm!==undefined&&top+L.bottom>doc.drawer.heightMm)add('height','Item exceeds the drawer height clearance.');
+    if(doc.drawer.heightMm!==undefined&&top+seatingOffset(L.bottom,p.width,p.depth)>doc.drawer.heightMm)add('height','Item exceeds the drawer height clearance.');
   }catch(error){add('parameters',error instanceof Error?error.message:String(error));}
   return issues;
 }

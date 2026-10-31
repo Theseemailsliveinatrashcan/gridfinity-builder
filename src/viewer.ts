@@ -1,10 +1,23 @@
-import { instanceGroup, fallbackAssembly, type AssemblyInstance } from './planner/viewer';
+import { instanceGroup, type AssemblyInstance } from './planner/viewer';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { MeshOut } from './geometry/generate';
 
 const PIECE_COLORS = [0x4f7cff, 0xf28c28, 0x2fb36d, 0xd64f8a, 0x8a63d2, 0x1fa3b8, 0xc9a227, 0x6b7a8f];
 const TOO_BIG = 0xe04545;
+
+/** Release instance attributes as well as each mesh's geometry and materials. */
+export function disposeMeshGroup(group: THREE.Group): void {
+  for (const child of [...group.children]) {
+    if (child instanceof THREE.Mesh) {
+      if (child instanceof THREE.InstancedMesh) child.dispose();
+      child.geometry.dispose();
+      const materials = Array.isArray(child.material) ? child.material : [child.material];
+      materials.forEach(material => material.dispose());
+    }
+    group.remove(child);
+  }
+}
 
 export class Viewer {
   private renderer: THREE.WebGLRenderer;
@@ -50,24 +63,30 @@ export class Viewer {
     this.camera.updateProjectionMatrix();
   }
 
-  showAssembly(instances:AssemblyInstance[]):void {
-    // Reuse framing/grid logic, then replace temporary meshes with shared instances.
-    const pieces=fallbackAssembly(instances);this.show(pieces,false,'drawer-assembly:'+Math.max(0,...pieces.map(piece=>piece.max[2])));
-    const bounds=new THREE.Box3().setFromObject(this.group),centre=bounds.getCenter(new THREE.Vector3());
-    // show() centres world bounds; assembly transforms need the original world centre.
-    const world=new THREE.Box3();for(const instance of instances){const bb=new THREE.Box3(new THREE.Vector3(...instance.mesh.min),new THREE.Vector3(...instance.mesh.max));const m=new THREE.Matrix4().makeRotationZ((instance.transform.rotation??0)*Math.PI/180);m.setPosition(...instance.transform.translation);world.union(bb.applyMatrix4(m));}
-    world.getCenter(centre);centre.z=world.isEmpty()?0:world.min.z;
-    for(const child of [...this.group.children]){const mesh=child as THREE.Mesh;if(mesh instanceof THREE.InstancedMesh)mesh.dispose();mesh.geometry.dispose();(mesh.material as THREE.Material).dispose();this.group.remove(child);}
-    const shared=instanceGroup(instances,[centre.x,centre.y,centre.z]);this.group.add(...[...shared.children]);
+  showAssembly(instances: AssemblyInstance[]): void {
+    disposeMeshGroup(this.group);
+    const bounds = new THREE.Box3();
+    for (const instance of instances) {
+      const localBounds = new THREE.Box3(
+        new THREE.Vector3(...instance.mesh.min),
+        new THREE.Vector3(...instance.mesh.max),
+      );
+      const matrix = new THREE.Matrix4().makeRotationZ((instance.transform.rotation ?? 0) * Math.PI / 180);
+      matrix.setPosition(...instance.transform.translation);
+      bounds.union(localBounds.applyMatrix4(matrix));
+    }
+
+    const centre = bounds.getCenter(new THREE.Vector3());
+    const bottom = bounds.isEmpty() ? 0 : bounds.min.z;
+    const shared = instanceGroup(instances, [centre.x, centre.y, bottom]);
+    this.group.add(...[...shared.children]);
+    const size = bounds.getSize(new THREE.Vector3());
+    this.updateFrame(bounds, `drawer-assembly:${size.x}:${size.y}:${size.z}`);
   }
+
   /** Show pieces, pulled apart slightly so splits are visible. */
   show(pieces: MeshOut[], explode: boolean, frameKey: string): void {
-    for (const child of [...this.group.children]) {
-      const mesh = child as THREE.Mesh;
-      mesh.geometry.dispose();
-      (mesh.material as THREE.Material).dispose();
-      this.group.remove(child);
-    }
+    disposeMeshGroup(this.group);
     const all = new THREE.Box3();
     const centre = new THREE.Vector3();
     for (const p of pieces) all.union(new THREE.Box3(new THREE.Vector3(...p.min), new THREE.Vector3(...p.max)));
@@ -88,7 +107,11 @@ export class Viewer {
       this.group.add(mesh);
     });
 
-    const size = all.getSize(new THREE.Vector3());
+    this.updateFrame(all, frameKey);
+  }
+
+  private updateFrame(bounds: THREE.Box3, frameKey: string): void {
+    const size = bounds.getSize(new THREE.Vector3());
     const span = Math.max(size.x, size.y, 42);
     if (this.grid) {
       this.scene.remove(this.grid);
