@@ -116,3 +116,14 @@ main:has(#planner-canvas:not([hidden])) #viewport { top: 40%; }
 @media(max-width:700px){ main:has(#planner-canvas:not([hidden])) { height: 85vh; } #planner-canvas { min-height: 240px; } main:has(#planner-canvas:not([hidden])) #viewport { top: max(40%, 240px); } }
 
 .spacer-outline {fill:#ffe2ae;stroke:#a36d19;stroke-width:.5;}
+
+#panel, #planner-panel, #planner-panel fieldset, #planner-panel .field, #planner-panel .with-unit { min-width: 0; }
+#planner-panel .field { grid-template-columns: minmax(0, 1fr) minmax(0, 135px); }
+#planner-panel .field-toggle { grid-template-columns: auto minmax(0, 1fr); }
+#planner-panel .field-range { grid-template-columns: minmax(0, 1fr) minmax(0, 100px) 32px; }
+#planner-panel input, #planner-panel select { min-width: 0; width: 100%; box-sizing: border-box; }
+#planner-panel input[type=checkbox] { width: auto; }
+#planner-panel .label, #planner-panel small, #planner-panel button { overflow-wrap: anywhere; }
+#planner-panel .presets { display: flex; flex-wrap: wrap; }
+#planner-panel > div > label:not(.field) input { display: block; max-width: 100%; }
+body:has(#planner-panel:not([hidden])) #downloads { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

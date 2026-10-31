@@ -32,3 +32,32 @@ export function toBinaryStl(positions: Float32Array, indices: Uint32Array, offse
   }
   return new Uint8Array(buffer);
 }
+
+/** Bounded STL chunks for drawer archives; no full STL buffer is retained. */
+export function* binaryStlChunks(positions: Float32Array, indices: Uint32Array, offset: [number, number, number]): Generator<Uint8Array> {
+  const header = new Uint8Array(84);
+  header.set(new TextEncoder().encode('Gridfinity Builder'));
+  new DataView(header.buffer).setUint32(80, indices.length / 3, true);
+  yield header;
+  for (let start = 0; start < indices.length; start += 3072) {
+    const end = Math.min(indices.length, start + 3072);
+    const chunk = new Uint8Array((end - start) / 3 * 50);
+    const view = new DataView(chunk.buffer);
+    let cursor = 0;
+    const coordinate = (index: number, axis: number) => positions[index * 3 + axis] - offset[axis];
+    for (let i = start; i < end; i += 3) {
+      const [a, b, c] = [indices[i], indices[i + 1], indices[i + 2]];
+      const u = [0, 1, 2].map(axis => coordinate(b, axis) - coordinate(a, axis));
+      const v = [0, 1, 2].map(axis => coordinate(c, axis) - coordinate(a, axis));
+      const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const length = Math.hypot(...normal) || 1;
+      for (const n of normal) { view.setFloat32(cursor, n / length, true); cursor += 4; }
+      for (const index of [a, b, c]) for (let axis = 0; axis < 3; axis++) {
+        view.setFloat32(cursor, coordinate(index, axis), true);
+        cursor += 4;
+      }
+      cursor += 2;
+    }
+    yield chunk;
+  }
+}

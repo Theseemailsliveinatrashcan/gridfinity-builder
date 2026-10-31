@@ -1,3 +1,5 @@
+import { exportDrawer } from './export/planner-download';
+import type { PrintManifest } from './export/planner';
 import { BatchQueue, jobKey } from './planner/batch';
 import { plannerJobs, assemblyInstances, type PlannedJob, type AssemblyInstance } from './planner/viewer';
 import { validatePlacement } from './planner/document';
@@ -116,20 +118,59 @@ let plannerDocument=initialPlanner;
 const plannerBatch=new BatchQueue();
 let sceneJobs:PlannedJob[]=[],sceneDocument:PlannerDocument|undefined,sceneSelected:string|undefined,showAccessories=false;
 let sceneTimer:number|undefined,sceneErrors:string[]=[],sceneProgress='';
+let drawerFormat:'zip'|'3mf'='zip';
+let drawerExport:{controller:AbortController;done:number;total:number}|undefined;
+let drawerManifest:{document:string;manifest:PrintManifest}|undefined;
+let exportNotice='';
+const recipeVolumes=new Map<string,number>();
+function recordRecipeVolume(key:string,result:GenerateResult){
+  const volume=result.parts.reduce((sum,part)=>sum+part.mesh.volume*part.quantity,0);
+  recipeVolumes.delete(key);recipeVolumes.set(key,volume);
+  while(recipeVolumes.size>256)recipeVolumes.delete(recipeVolumes.keys().next().value!);
+}
+function drawerFilamentText():string {
+  if(drawerManifest&&drawerManifest.document===JSON.stringify(sceneDocument))return `≤ ${Math.round(estimateFilament(drawerManifest.manifest.totalVolume,prefs.material).grams)} g ${prefs.material} for drawer`;
+  let volume=0,known=0;
+  for(const planned of sceneJobs){const key=jobKey(planned.job),cached=plannerBatch.cache.get(key);if(cached)recordRecipeVolume(key,cached);const amount=recipeVolumes.get(key);if(amount!==undefined){volume+=amount;known++;}}
+  return known===sceneJobs.length?`≤ ${Math.round(estimateFilament(volume,prefs.material).grams)} g ${prefs.material} for drawer`:`Drawer filament pending (${known}/${sceneJobs.length} placements)`;
+}
+function cancelDrawerExport(){drawerExport?.controller.abort();}
+async function downloadDrawer(){
+  if(!sceneDocument||drawerExport)return;
+  const snapshot=structuredClone(sceneDocument),controller=new AbortController();
+  plannerBatch.cancel();clearTimeout(sceneTimer);
+  const operation={controller,done:0,total:0};drawerExport=operation;exportNotice='';drawPlannerScene();
+  try {
+    const output=await exportDrawer(snapshot,{format:drawerFormat,material:prefs.material,signal:controller.signal,
+      load:(job,signal)=>plannerBatch.run(job,signal),
+      progress:(done,total)=>{operation.done=done;operation.total=total;drawPlannerScene();}});
+    controller.signal.throwIfAborted();
+    if(!plannerMode||JSON.stringify(sceneDocument)!==JSON.stringify(snapshot))throw new DOMException('Drawer changed.','AbortError');
+    drawerManifest={document:JSON.stringify(snapshot),manifest:output.manifest};
+    const url=URL.createObjectURL(output.blob),link=document.createElement('a');link.href=url;link.download=`drawer.${drawerFormat}`;link.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
+    exportNotice=`Downloaded drawer.${drawerFormat}`;
+  }catch(error){exportNotice=controller.signal.aborted?'Drawer export cancelled':error instanceof Error?error.message:String(error);}
+  finally {if(drawerExport===operation){drawerExport=undefined;if(plannerMode&&sceneDocument)queuePlannerScene(sceneDocument,sceneSelected);}}
+}
 function drawPlannerScene(){
   if(!plannerMode||!sceneDocument)return;
   const instances=assemblyInstances(sceneDocument,sceneJobs,plannerBatch.cache,sceneSelected,showAccessories);
   viewer.showAssembly(instances);lastResult=undefined;downloadsEl.replaceChildren();
-  statusEl.textContent=sceneProgress+` · ${sceneDocument.items.length} items · ${instances.filter(i=>i.proxy).length} footprint proxies`;
+  statusEl.textContent=(drawerExport?`Exporting drawer ${drawerExport.done}/${drawerExport.total}`:sceneProgress)+` · ${sceneDocument.items.length} items · ${instances.filter(i=>i.proxy).length} footprint proxies · ${drawerFilamentText()}`+(exportNotice?' · '+exportNotice:'');
   warningsEl.replaceChildren();for(const issue of [...planDrawer(sceneDocument).issues,...sceneDocument.items.flatMap(item=>validatePlacement(sceneDocument!,item))]){const li=document.createElement('li');li.textContent=issue.message;warningsEl.append(li);}
+  if(drawerManifest?.document===JSON.stringify(sceneDocument)&&drawerManifest.manifest.parts.some(part=>!part.fitsBed)){const li=document.createElement('li');li.textContent='Some drawer pieces exceed the print bed. Enable splitting or adjust the bed settings.';warningsEl.append(li);}
   for(const error of sceneErrors){const li=document.createElement('li');li.textContent=error;warningsEl.append(li);}
-  const cancel=document.createElement('button');cancel.textContent='Cancel generation';cancel.onclick=()=>{clearTimeout(sceneTimer);plannerBatch.cancel();sceneProgress='Drawer preview cancelled';drawPlannerScene();};downloadsEl.append(cancel);
-  const retry=document.createElement('button');retry.textContent='Regenerate preview';retry.onclick=()=>queuePlannerScene(sceneDocument!,sceneSelected);downloadsEl.append(retry);
+  const cancel=document.createElement('button');cancel.textContent=drawerExport?'Cancel export':'Cancel generation';cancel.onclick=()=>{if(drawerExport){cancelDrawerExport();return;}clearTimeout(sceneTimer);plannerBatch.cancel();sceneProgress='Drawer preview cancelled';drawPlannerScene();};downloadsEl.append(cancel);
+  const retry=document.createElement('button');retry.textContent='Regenerate preview';retry.disabled=!!drawerExport;retry.onclick=()=>queuePlannerScene(sceneDocument!,sceneSelected);downloadsEl.append(retry);
   const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=showAccessories;toggle.onchange=()=>{showAccessories=toggle.checked;drawPlannerScene();};label.append(toggle,document.createTextNode(' Show loose accessories'));downloadsEl.append(label);
+  const format=select([['zip','STL ZIP'],['3mf','3MF']] as ['zip'|'3mf',string][],drawerFormat,value=>{drawerFormat=value;},'Drawer file format');format.disabled=!!drawerExport;downloadsEl.append(format);
+  const material=select(Object.keys(MATERIALS).map(m=>[m as Material,m]),prefs.material,value=>{prefs.material=value;localStorage.setItem('material',value);drawPlannerScene();},'Drawer material');material.disabled=!!drawerExport;downloadsEl.append(material);
+  const downloadButton=document.createElement('button');downloadButton.textContent='Download drawer';downloadButton.className='primary';downloadButton.disabled=!!drawerExport;downloadButton.onclick=()=>void downloadDrawer();downloadsEl.append(downloadButton);
 }
 function queuePlannerScene(doc:PlannerDocument,selected?:string){
+  cancelDrawerExport();
   plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=doc;sceneSelected=selected;sceneJobs=plannerJobs(doc);plannerBatch.cache.pin(sceneJobs.find(job=>job.id===selected)?jobKey(sceneJobs.find(job=>job.id===selected)!.job):undefined);sceneErrors=[];sceneProgress='Preparing drawer preview';drawPlannerScene();
-  sceneTimer=window.setTimeout(()=>plannerBatch.start([...sceneJobs].sort((a,b)=>Number(b.id===sceneSelected)-Number(a.id===sceneSelected)).map(job=>job.job),{progress:(done,total)=>{sceneProgress=`Drawer preview ${done}/${total}`;},updated:drawPlannerScene,error:(_key,error)=>{sceneErrors.push(error);}}),180);
+  sceneTimer=window.setTimeout(()=>plannerBatch.start([...sceneJobs].sort((a,b)=>Number(b.id===sceneSelected)-Number(a.id===sceneSelected)).map(job=>job.job),{progress:(done,total)=>{sceneProgress=`Drawer preview ${done}/${total}`;},updated:drawPlannerScene,result:recordRecipeVolume,error:(_key,error)=>{sceneErrors.push(error);}}),180);
 }
 let singleState=structuredClone(state);
 /** fromInput: the change came from a form control that already shows the new value. */
@@ -159,6 +200,7 @@ for (const tab of document.querySelectorAll<HTMLButtonElement>('.kinds button'))
   };
 }
 function clearPlannerPreview():void {
+  cancelDrawerExport();
   plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=undefined;
   clearTimeout(timer);timer=undefined;clearTimeout(watchdog);watchdog=undefined;
   requestId++;pending=false;
@@ -167,7 +209,7 @@ function clearPlannerPreview():void {
   statusEl.textContent='Select a planner item to preview.';warningsEl.replaceChildren();downloadsEl.replaceChildren();
 }
 function leavePlanner(){
-  if(!plannerMode)return;plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=undefined;disposePlanner?.();disposePlanner=undefined;plannerMode=false;worker=startWorker();state=structuredClone(singleState);
+  if(!plannerMode)return;cancelDrawerExport();plannerBatch.cancel();clearTimeout(sceneTimer);sceneDocument=undefined;disposePlanner?.();disposePlanner=undefined;plannerMode=false;worker=startWorker();state=structuredClone(singleState);
   $('#planner-canvas').hidden=true;form.hidden=false;$('#planner-panel').hidden=true;$('#reset').hidden=false;
   $('#planner-mode').classList.remove('active');
 }

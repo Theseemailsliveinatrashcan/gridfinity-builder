@@ -16,7 +16,7 @@ Object.defineProperty(window,'Worker',{value:FakeWorker,configurable:true});awai
 const pause=()=>new Promise(resolve=>setTimeout(resolve,220));
 export async function runPreviewLifecycleChecks(){
  const button=(text:string)=>[...document.querySelectorAll<HTMLButtonElement>('#planner-panel button')].find(b=>b.textContent===text)!.click();
- const empty=()=>{if(document.querySelector('#downloads')!.textContent!.includes('Download')||document.querySelector('.filament')||!document.querySelector('#status')!.textContent!.includes('0 items'))throw new Error('Empty planner retained item exports/results.');};
+ const empty=()=>{if(document.querySelector('#downloads')!.textContent!.includes('Download STL')||document.querySelector('.filament')||!document.querySelector('#status')!.textContent!.includes('0 items'))throw new Error('Empty planner retained item exports/results.');};
  const settle=()=>{for(let i=0;i<10;i++){const w=workers.at(-1)!;const job=w.jobs.find(j=>!w.replied.has(j));if(!job||w.terminated)return;w.reply(job);}};
  const edit=(value:string)=>{const input=document.querySelector<HTMLInputElement>('#planner-panel [data-key="bin.scoop"]')!;input.value=value;input.dispatchEvent(new Event('input'));};
  document.querySelector<HTMLButtonElement>('#planner-mode')!.click();button('Add bin');await pause();settle();

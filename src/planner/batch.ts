@@ -106,6 +106,7 @@ export interface BatchCallbacks {
   progress: (completed: number, total: number) => void;
   updated: () => void;
   error: (key: string, message: string) => void;
+  result?: (key: string, result: GenerateResult) => void;
 }
 
 function geometryWorker(): WorkerLike {
@@ -118,7 +119,7 @@ export class BatchQueue {
   private batchId = 0;
   private nextId = 0;
   private queue: { key: string; job: Job }[] = [];
-  private active?: { key: string; id: number };
+  private active?: { key: string; id: number; purpose: Job['purpose'] };
   private completed = 0;
   private total = 0;
   private callbacks?: BatchCallbacks;
@@ -150,9 +151,10 @@ export class BatchQueue {
     if (!active || reply.batchId !== this.batchId || reply.jobId !== active.id || reply.key !== active.key) return;
     clearTimeout(this.timeout);
     if (reply.type === 'result') {
-      if (!this.cache.set(reply.key, reply.result)) {
+      if (!this.cache.set(reply.key, reply.result) && active.purpose === 'preview') {
         this.callbacks?.error(reply.key, 'Preview does not fit in the cache budget; showing a footprint proxy.');
       }
+      this.callbacks?.result?.(reply.key, reply.result);
     } else {
       this.callbacks?.error(reply.key, reply.error);
     }
@@ -195,11 +197,32 @@ export class BatchQueue {
     return this.batchId;
   }
 
+  async run(job: Job, signal?: AbortSignal): Promise<GenerateResult> {
+    if (signal?.aborted) throw new DOMException('Drawer export cancelled.', 'AbortError');
+    const cached = this.cache.get(jobKey(job));
+    if (cached) return cached;
+    return new Promise((resolve, reject) => {
+      const cleanup = () => signal?.removeEventListener('abort', abort);
+      const abort = () => {
+        this.cancel();
+        cleanup();
+        reject(new DOMException('Drawer export cancelled.', 'AbortError'));
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      this.start([job], {
+        progress: () => {},
+        updated: () => {},
+        result: (_key, result) => { cleanup(); resolve(result); },
+        error: (_key, message) => { cleanup(); reject(new Error(message)); },
+      });
+    });
+  }
+
   private pump(): void {
     if (this.active || !this.queue.length) return;
     const { key, job } = this.queue.shift()!;
     const id = ++this.nextId;
-    this.active = { key, id };
+    this.active = { key, id, purpose: job.purpose };
     this.worker ??= this.create();
     this.worker.postMessage({ ...job, type: 'generate', batchId: this.batchId, jobId: id, key });
     this.timeout = setTimeout(() => this.fail('Geometry job timed out.'), 30_000);
