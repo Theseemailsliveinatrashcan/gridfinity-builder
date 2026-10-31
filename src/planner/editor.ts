@@ -7,13 +7,14 @@ import { footprint, planDrawer } from './layout';
 import { encodePlanner, MAX_INFLATED, parsePlannerJson } from './codec';
 const NS='http://www.w3.org/2000/svg';
 const element=<K extends keyof HTMLElementTagNameMap>(tag:K,text?:string)=>{const el=document.createElement(tag);if(text)el.textContent=text;return el;};
-export interface EditorOptions {document?:PlannerDocument;onPreview:(request:GenerateRequest)=>void;onDocument?:(document:PlannerDocument)=>void}
+export interface EditorOptions {document?:PlannerDocument;onPreview:(request:GenerateRequest)=>void;onEmptySelection:()=>void;onDocument?:(document:PlannerDocument)=>void}
 export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:EditorOptions):()=>void {
  let doc=structuredClone(options.document??defaultPlanner),selected=doc.items[0]?.id,disposeForm:(()=>void)|undefined,alive=true;
  const errors=element('p');errors.setAttribute('role','status');errors.className='planner-errors';
  const toolbar=element('div'),settings=element('div'),list=element('select'),coords=element('div'),details=element('div');list.setAttribute('aria-label','Planner items');
  const svg=document.createElementNS(NS,'svg');svg.classList.add('planner-grid');svg.setAttribute('role','application');svg.setAttribute('aria-label','Drawer layout: select a part, arrow keys move, Shift arrows resize');svg.tabIndex=0;
- panel.replaceChildren(toolbar,settings,list,coords,errors,details);canvas.replaceChildren(svg);
+ const heading=element('h2','Drawer layout');canvas.replaceChildren(heading,svg);
+ panel.replaceChildren(toolbar,settings,list,coords,errors,details);
  const message=(text:string)=>{errors.textContent=text;};
  function commit(next:PlannerDocument,keepForm=false):boolean {
   const parsed=sanitizePlanner(next);
@@ -60,14 +61,16 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
   for(const item of doc.items)list.add(new Option(item.name,item.id,false,item.id===selected));
   list.hidden=!doc.items.length;const item=current();
   if(item){
-   const name=element('input');name.value=item.name;name.setAttribute('aria-label','Item name');name.onchange=()=>update({...item,name:name.value});coords.append(name);
-   number(coords,'X (21 mm ticks)',item.x2,n=>update({...item,x2:Math.round(n)}));number(coords,'Y (21 mm ticks)',item.y2,n=>update({...item,y2:Math.round(n)}));
-   number(coords,'Width (half units)',item.w2,n=>update({...item,w2:Math.round(n)}));number(coords,'Depth (half units)',item.d2,n=>update({...item,d2:Math.round(n)}));
+   const id=item.id;
+   const edit=(patch:Partial<PlannerItem>)=>{const latest=doc.items.find(item=>item.id===id);return latest?update({...latest,...patch} as PlannerItem):false;};
+   const name=element('input');name.value=item.name;name.setAttribute('aria-label','Item name');name.onchange=()=>edit({name:name.value});coords.append(name);
+   number(coords,'X (21 mm ticks)',item.x2,n=>edit({x2:Math.round(n)}));number(coords,'Y (21 mm ticks)',item.y2,n=>edit({y2:Math.round(n)}));
+   number(coords,'Width (half units)',item.w2,n=>edit({w2:Math.round(n)}));number(coords,'Depth (half units)',item.d2,n=>edit({d2:Math.round(n)}));
    disposeForm=mountPartForm(details,{getRequest:()=>itemRequest(current()!,doc.print),sections:SECTIONS.filter(s=>s.title!=='Print bed'),commit:req=>{
     const next=itemFromRequest(current()!,req);const issues=validatePlacement(doc,next);if(issues.length){message(issues.map(i=>i.message).join(' '));return false;}return update(next,next.w2===current()!.w2 && next.d2===current()!.d2);
    }});
    options.onPreview(itemRequest(item,doc.print));
-  }else message('Add a bin or holder. Select a part to preview it.');
+  }else {options.onEmptySelection();message('Add a bin or holder. Select a part to preview it.');}
   draw();
  }
  function draw(){
@@ -79,7 +82,10 @@ export function mountPlanner(panel:HTMLElement,canvas:HTMLElement,options:Editor
   for(const item of doc.items){const f=footprint(item),x=L.gridOrigin[0]+item.x2*21,y=L.gridOrigin[1]+item.y2*21;
    const r=rect(x,y,f.w2*21,f.d2*21,item.id===selected?'planner-item selected':'planner-item');r.setAttribute('aria-label',item.name);r.dataset.id=item.id;
    const title=document.createElementNS(NS,'title');title.textContent=item.name;r.append(title);r.onpointerdown=e=>startDrag(e,item,false);
-   if(item.id===selected){const size=Math.max(12,44*(doc.drawer.widthMm+10)/Math.max(1,svg.getBoundingClientRect().width));const handle=rect(x+f.w2*21-size/2,y+f.d2*21-size/2,size,size,'resize-handle');handle.onpointerdown=e=>startDrag(e,item,true);}
+   if(item.id===selected){const matrix=svg.getScreenCTM(),mmPerPixel=1/Math.max(0.001,matrix?.a??1);
+    const size=Math.max(42*0.3,12*mmPerPixel),target=Math.max(size,44*mmPerPixel);
+    rect(x+f.w2*21-size/2,y+f.d2*21-size/2,size,size,'resize-handle');
+    const hit=rect(x+f.w2*21-target/2,y+f.d2*21-target/2,target,target,'resize-hit');hit.onpointerdown=e=>startDrag(e,item,true);}
   }
  }
  function point(event:PointerEvent){const m=svg.getScreenCTM();if(!m)throw new Error('Grid unavailable');return new DOMPoint(event.clientX,event.clientY).matrixTransform(m.inverse());}

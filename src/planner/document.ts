@@ -29,7 +29,8 @@ export function validatePlacement(doc:PlannerDocument,candidate:PlannerItem):Iss
   try {
     const req=itemRequest(candidate,doc.print);
     const p=candidate.kind==='bin'?vaseBinParams(req.bin):holderBinParams(req.holder);
-    validateBin(p).forEach(message=>add('parameters',message));dividerLayout(p);
+    // Holder depth is checked above; a pocket deck is intentionally solid.
+    validateBin(candidate.kind==='holder' ? {...p,solid:true} : p).forEach(message=>add('parameters',message));dividerLayout(p);
     const layout=binLayout(p);
     if(!p.vase&&p.labelSlot==='card'&&p.withLid&&layout.floorZ+12.8>layout.top-0.5)add('parameters','Bin too short for label cards with a lid.');
     const nx=Math.max(1,Math.round(p.compartmentsX));

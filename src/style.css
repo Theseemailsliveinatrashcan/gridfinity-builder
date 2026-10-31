@@ -97,17 +97,20 @@ main { flex: 1; position: relative; min-width: 0; }
 #planner-mode { margin: 0 0 12px; padding: 9px 18px; }
 #planner-mode.active { background: var(--accent); color: white; }
 #planner-panel button { padding: 9px; margin: 3px; min-height: 40px; }
-#planner-panel label { display: block; font-size: .85rem; margin: 8px 0; }
+#planner-panel label:not(.field) { display: block; font-size: .85rem; margin: 8px 0; }
 #planner-panel input, #planner-panel select { max-width: 100%; }
 .planner-errors { color: var(--err); }
-#planner-canvas { position: absolute; z-index: 2; top: 10px; right: 10px; width: min(60%, 620px); background: white; border: 1px solid var(--line); border-radius: 8px; }
-.planner-grid { width: 100%; max-height: 45vh; display: block; touch-action: none; }
+#planner-canvas { position: relative; z-index: 2; width: 100%; height: 40%; min-height: 160px; background: white; border: 2px solid var(--line); border-radius: 8px; }
+#planner-canvas h2 { margin: 6px 12px; font-size: .95rem; }
+main:has(#planner-canvas:not([hidden])) #viewport { top: 40%; }
+.planner-grid { width: 100%; height: calc(100% - 32px); max-height: 45vh; display: block; touch-action: none; }
 .drawer-outline { fill: #f3f4f7; stroke: #555; stroke-width: .5; }
 .plate-outline { fill: #ddd; stroke: #999; stroke-width: .5; }
 .socket-outline { fill: #fafafa; stroke: #ccc; stroke-width: .4; }
 .planner-item { fill: #4f7cff55; stroke: #4f7cff; stroke-width: .8; cursor: move; }
 .planner-item.selected { stroke: #102d91; stroke-width: 1.2; }
-.resize-handle { fill: #102d91; cursor: nwse-resize; }
+.resize-handle { fill: #102d91; pointer-events: none; }
+.resize-hit { fill: transparent; pointer-events: all; cursor: nwse-resize; }
 .planner-ghost { fill: #44bb6655; stroke: #198038; stroke-width: 1; pointer-events: none; }
 .planner-ghost.invalid { fill: #ff334455; stroke: #a32020; }
-@media(max-width:700px){ #planner-canvas { position: relative; top: auto; right: auto; width: 100%; } .planner-grid { min-height: 240px; } }
+@media(max-width:700px){ main:has(#planner-canvas:not([hidden])) { height: 85vh; } #planner-canvas { min-height: 240px; } main:has(#planner-canvas:not([hidden])) #viewport { top: max(40%, 240px); } }

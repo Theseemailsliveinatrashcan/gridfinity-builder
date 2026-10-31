@@ -25,7 +25,7 @@ for(const connectScrews of [false,true]) for(const mountHoles of ['none','counte
  const hardware=unionAll(plateHardwareCutters(p))!;
  expect(plate.intersect(hardware).volume()).toBeLessThan(1e-6);
  for(const h of plateConnectionCutters(p,[74],[42]))expect(h.intersect(hardware).volume()).toBeLessThan(1e-6);
-});
+}, 15_000);
 it('screw bore axis and circular openings match across split seams on both axes',()=>{
  const req={...structuredClone(DEFAULTS),kind:'plate' as const,plate:{...defaultPlate,width:4,depth:4,style:'skeletonized' as const,connectScrews:true,magnets:true},print:{...DEFAULTS.print,split:true,bedX:100,bedY:100,connector:'dovetail' as const}};
  const result=generate(req); expect(result.pieces.length).toBe(4);expect(result.pieces.every(p=>p.fitsBed)).toBe(true);

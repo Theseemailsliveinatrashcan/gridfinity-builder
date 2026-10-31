@@ -44,12 +44,13 @@ let watchdog: number | undefined;
 
 function startWorker(): Worker {
   const w = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
-  w.onmessage = onWorkerMessage;
+  w.onmessage = e => { if(w===worker)onWorkerMessage(e); };
   w.onerror = (e) => {
     e.preventDefault();
+    if(w!==worker)return;
     restartWorker('The geometry engine crashed. Try a smaller part.');
   };
-  w.onmessageerror = () => restartWorker('Could not read the result from the geometry engine.');
+  w.onmessageerror = () => {if(w===worker)restartWorker('Could not read the result from the geometry engine.');};
   return w;
 }
 
@@ -133,6 +134,13 @@ for (const tab of document.querySelectorAll<HTMLButtonElement>('.kinds button'))
     changed();
   };
 }
+function clearPlannerPreview():void {
+  clearTimeout(timer);timer=undefined;clearTimeout(watchdog);watchdog=undefined;
+  requestId++;pending=false;
+  if(busy){worker.terminate();worker=startWorker();busy=false;}
+  lastResult=undefined;viewer.show([],false,'planner-empty');
+  statusEl.textContent='Select a planner item to preview.';warningsEl.replaceChildren();downloadsEl.replaceChildren();
+}
 function leavePlanner(){
   if(!plannerMode)return;disposePlanner?.();disposePlanner=undefined;plannerMode=false;state=structuredClone(singleState);
   $('#planner-canvas').hidden=true;form.hidden=false;$('#planner-panel').hidden=true;$('#reset').hidden=false;
@@ -140,10 +148,9 @@ function leavePlanner(){
 }
 $<HTMLButtonElement>('#planner-mode').onclick=()=>{
   if(plannerMode)return;
-  singleState=structuredClone(state);plannerMode=true;disposeForm?.();clearTimeout(timer);requestId++;pending=false;
-  lastResult=undefined;downloadsEl.replaceChildren();warningsEl.replaceChildren();statusEl.textContent='Select a planner item to preview.';form.hidden=true;$('#reset').hidden=true;$('#planner-panel').hidden=false;$('#planner-canvas').hidden=false;
+  singleState=structuredClone(state);plannerMode=true;disposeForm?.();clearPlannerPreview();form.hidden=true;$('#reset').hidden=true;$('#planner-panel').hidden=false;$('#planner-canvas').hidden=false;
   document.querySelectorAll('.kinds button').forEach(tab=>tab.classList.remove('active'));$('#planner-mode').classList.add('active');
-  disposePlanner=mountPlanner($('#planner-panel'),$('#planner-canvas'),{document:plannerDocument,onDocument:doc=>{plannerDocument=doc;},onPreview:req=>{state=req;clearTimeout(timer);timer=window.setTimeout(run,180);}});
+  disposePlanner=mountPlanner($('#planner-panel'),$('#planner-canvas'),{document:plannerDocument,onEmptySelection:clearPlannerPreview,onDocument:doc=>{plannerDocument=doc;},onPreview:req=>{state=req;clearTimeout(timer);timer=window.setTimeout(run,180);}});
 };
 $<HTMLButtonElement>('#reset').onclick = () => {
   const kind = state.kind;

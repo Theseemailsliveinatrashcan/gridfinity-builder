@@ -1,3 +1,4 @@
+import { presetValues } from '../src/geometry/holder';
 import { describe, expect, it } from 'vitest';
 import { deflateSync } from 'fflate';
 import { defaultPlanner, sanitizePlanner, validatePlacement, itemFromRequest, itemRequest, type PlannerDocument, type PlannerItem } from '../src/planner/document';
@@ -9,6 +10,13 @@ const doc=():PlannerDocument=>structuredClone(defaultPlanner);
 function bin(id='a',x2=0,y2=0,w2=2,d2=2):PlannerItem{const{width:_w,depth:_d,...params}=structuredClone(DEFAULTS.bin);return{id,name:id,x2,y2,w2,d2,rotation:0,kind:'bin',params};}
 const hash=(bytes:Uint8Array)=>'#p1.'+btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
 describe('planner document and placement',()=>{
+ for(const preset of ['aa','drill-metric-13'] as const) it(`accepts placement and import of ${preset} pocket holders`,()=>{
+  const d=doc(),{width:_w,depth:_d,...params}={...DEFAULTS.holder,...presetValues(preset),preset};
+  const item:PlannerItem={id:'holder',name:preset,x2:0,y2:0,w2:4,d2:4,rotation:0,kind:'holder',params};
+  expect(validatePlacement(d,item)).toEqual([]);
+  const imported=sanitizePlanner({...d,items:[item]});expect(imported.ok).toBe(true);
+  expect(decodePlanner(encodePlanner({...d,items:[item]})).mode).toBe('planner');
+ });
  it('bounds dimensions, quantizes ticks, strips unknown and duplicate footprint parameters',()=>{
   const item=bin();const parsed=sanitizePlanner({...doc(),drawer:{widthMm:1e9,depthMm:200,fitGapMm:-1},items:[{...item,x2:0.1,w2:2.1,params:{...item.params,width:99,evil:true}}]});
   expect(parsed.ok).toBe(true);if(!parsed.ok)return;expect(parsed.document.drawer.widthMm).toBe(2000);expect(parsed.document.items[0].w2).toBe(2);expect(parsed.document.items[0].params).not.toHaveProperty('width');expect(parsed.document.items[0].params).not.toHaveProperty('evil');
